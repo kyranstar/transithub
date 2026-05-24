@@ -42,14 +42,24 @@ and preview with no Pi or panel attached.
 suspended badges that won't flag the wrong direction; clean countdowns that never show `0m`
 and flash `Now` on arrival; correct NYC time even on a UTC Pi.
 
-## Hardware
+## Parts
 
-| Part | Notes |
-|------|-------|
-| Raspberry Pi | Pi 3 / Pi 4 / Pi Zero 2 W (Pi 5 not supported by the matrix driver) |
-| [Adafruit RGB Matrix Bonnet](https://www.adafruit.com/product/3211) | the default wiring |
-| One 64×32 RGB LED matrix | e.g. Adafruit #2279 |
-| 5V power supply (≥3A) | powers the panel through the bonnet |
+| Part | Adafruit | Price |
+|------|----------|-------|
+| Raspberry Pi 3 Model B | [#3055](https://www.adafruit.com/product/3055) | $35.00 |
+| 5V 2.5A micro-USB supply — powers the Pi | [#1995](https://www.adafruit.com/product/1995) | $8.25 |
+| RGB Matrix Bonnet | [#3211](https://www.adafruit.com/product/3211) | $14.95 |
+| 64×32 RGB LED matrix, 6mm pitch | [#2276](https://www.adafruit.com/product/2276) | $64.95 |
+| 5V 4A power supply, UL-listed — drives the panel | [#1466](https://www.adafruit.com/product/1466) | $14.95 |
+| **Total** | | **≈ $138** |
+
+*Adafruit list prices (USD), before tax/shipping.* You need **both** power supplies — the
+panel pulls its 5V 4A from the bonnet's screw terminals while the Pi runs off its own
+micro-USB supply. Any **Pi 3 / 4 / Pi Zero 2 W** works (Pi 5 isn't supported by the matrix
+driver). Seat the bonnet on the Pi's GPIO header, plug the panel's ribbon + power into the
+bonnet, and feed in the 5V 4A supply — see Adafruit's
+[assembly guide](https://learn.adafruit.com/adafruit-rgb-matrix-bonnet-for-raspberry-pi). The
+optional hardware-PWM jumper (see [Flicker tuning](#flicker-tuning)) is just a short wire.
 
 ## Install
 
