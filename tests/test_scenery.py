@@ -35,3 +35,41 @@ def test_glow_sun_lights_center():
 def test_dim_darkens():
     img = Image.new("RGB", (4, 4), (200, 200, 200))
     assert S.dim(img, 0.5).getpixel((0, 0)) == (100, 100, 100)
+
+
+# --- moon phases ---
+
+CX, CY, R = 32, 16, 6
+
+
+def _lit_sides(phase):
+    """(# of non-black pixels left of center, # right of center) for a moon."""
+    img = _img()
+    S.moon(img, CX, CY, R, phase)
+    left = sum(img.getpixel((x, y)) != (0, 0, 0) for x in range(CX) for y in range(32))
+    right = sum(img.getpixel((x, y)) != (0, 0, 0) for x in range(CX, 64) for y in range(32))
+    return left, right
+
+
+def test_moon_waxing_crescent_lights_right():
+    left, right = _lit_sides(0.10)          # waxing crescent -> sunlit on the right
+    assert right > left * 3
+
+
+def test_moon_waning_crescent_lights_left():
+    left, right = _lit_sides(0.90)          # waning crescent -> sunlit on the left
+    assert left > right * 3
+
+
+def test_moon_full_lights_whole_disc():
+    img = _img()
+    S.moon(img, CX, CY, R, 0.5)
+    assert img.getpixel((CX, CY)) != (0, 0, 0)            # center lit
+    assert img.getpixel((CX - R + 1, CY)) != (0, 0, 0)    # left limb lit
+    assert img.getpixel((CX + R - 1, CY)) != (0, 0, 0)    # right limb lit
+
+
+def test_moon_new_draws_nothing():
+    img = _img()
+    S.moon(img, CX, CY, R, 0.0)             # new moon is invisible -> no pixels, no stray glow
+    assert img.tobytes() == _img().tobytes()

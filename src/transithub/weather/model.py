@@ -1,5 +1,6 @@
+import math
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import List, Optional
 
@@ -126,6 +127,37 @@ def precip_window(hourly: dict, now: datetime, now_precip: bool = False,
         peak_prob=int(max((prob[i] or 0) for i in block)),
         amount_in=round(amount, 2),
     )
+
+
+def _julian_day(dt: datetime) -> float:
+    if dt.tzinfo is not None:
+        dt = dt.astimezone(timezone.utc)        # naive datetimes are treated as UTC
+    y, m = dt.year, dt.month
+    d = dt.day + (dt.hour + dt.minute / 60 + dt.second / 3600) / 24
+    if m <= 2:
+        y -= 1
+        m += 12
+    a = y // 100
+    b = 2 - a + a // 4
+    return int(365.25 * (y + 4716)) + int(30.6001 * (m + 1)) + d + b - 1524.5
+
+
+def moon_phase(now: datetime) -> float:
+    """Lunar phase as a fraction in [0, 1): 0 new, 0.25 first quarter, 0.5 full,
+    0.75 last quarter. Astronomical (no API) — mean elongation plus the leading
+    periodic terms (Meeus, ch. 48), accurate to ~1-2% illumination."""
+    T = (_julian_day(now) - 2451545.0) / 36525.0          # Julian centuries since J2000
+    D = 297.8501921 + 445267.1114034 * T - 0.0018819 * T * T   # mean elongation Moon-Sun
+    M = 357.5291092 + 35999.0502909 * T                        # Sun's mean anomaly
+    Mp = 134.9633964 + 477198.8675055 * T + 0.0087414 * T * T  # Moon's mean anomaly
+    r = math.radians
+    phase_angle = (180 - D
+                   - 6.289 * math.sin(r(Mp)) + 2.100 * math.sin(r(M))
+                   - 1.274 * math.sin(r(2 * D - Mp)) - 0.658 * math.sin(r(2 * D))
+                   - 0.214 * math.sin(r(2 * Mp)) - 0.110 * math.sin(r(D)))
+    illum = (1 + math.cos(r(phase_angle))) / 2            # sunlit fraction of the disc
+    elong = math.acos(max(-1.0, min(1.0, 1 - 2 * illum))) / (2 * math.pi)   # 0..0.5
+    return elong if (D % 360) < 180 else 1 - elong       # waxing first half, waning second
 
 
 def sun_phase(now: datetime, sunrise: datetime, sunset: datetime) -> SunPhase:

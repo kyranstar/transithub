@@ -77,8 +77,47 @@ def glow_sun(img, cx, cy, r, color=(255, 226, 178), intensity=1.0):
                     px[xx, yy] = lerp(px[xx, yy], color, min(1.0, a * intensity))
 
 
-def moon(img, cx, cy, r):
-    glow_sun(img, cx, cy, r, color=(220, 226, 246))
+MOON_COLOR = (220, 226, 246)
+
+
+def moon(img, cx, cy, r, phase):
+    """Draw the sunlit part of the moon for `phase` in [0, 1) (0 new, 0.5 full).
+
+    The terminator follows the phase: waxing lights the right limb, waning the
+    left (northern hemisphere). The dark part is left as sky, so a new moon shows
+    nothing and a crescent is a glowing sliver. A soft halo hugs the lit limb."""
+    c = math.cos(2 * math.pi * phase)              # +1 new ... -1 full; scales the terminator
+    if (1 - c) / 2 < 0.01:                         # essentially a new moon -> invisible
+        return
+    w, h = img.size
+    px = img.load()
+    waxing = phase < 0.5
+    lit = set()
+    for yy in range(cy - r, cy + r + 1):
+        ny = (yy - cy) / r
+        if abs(ny) > 1:
+            continue
+        rx = math.sqrt(1 - ny * ny) * r            # disc half-width at this row
+        for xx in range(cx - r, cx + r + 1):
+            nx = xx - cx
+            if abs(nx) > rx:
+                continue
+            if (nx >= rx * c) if waxing else (nx <= -rx * c):
+                if 0 <= xx < w and 0 <= yy < h:
+                    px[xx, yy] = MOON_COLOR
+                    lit.add((xx, yy))
+    # halo: brighten pixels just outside the disc that border a lit pixel
+    for (lx, ly) in lit:
+        for dx in range(-2, 3):
+            for dy in range(-2, 3):
+                xx, yy = lx + dx, ly + dy
+                if not (0 <= xx < w and 0 <= yy < h) or (xx, yy) in lit:
+                    continue
+                d = math.hypot(xx - cx, yy - cy)
+                if d > r:
+                    a = max(0.0, (1 - (d - r) / 2)) * 0.3
+                    if a > 0:
+                        px[xx, yy] = lerp(px[xx, yy], MOON_COLOR, a)
 
 
 def stars(img, frame, seed=7, count=14):

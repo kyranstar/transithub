@@ -45,3 +45,22 @@ def test_wet_carries_scene_background_to_forecast_slide():
     rain = _scene(_w(condition=Condition.RAIN)).render(forecast_tick)
     dry = _scene(_w(condition=Condition.CLOUDY)).render(forecast_tick)
     assert rain.tobytes() != dry.tobytes()   # backgrounds differ -> rain scene carried over
+
+
+def _night(now, **kw):
+    return WeatherScene(_w(condition=Condition.CLEAR, **kw), now,
+                        rundown_seconds=60, cols=64, rows=32, trash_days=[])
+
+
+def test_clear_night_draws_the_moon():
+    # waxing gibbous night -> moon pixels in the top-right corner
+    img = _night(datetime(2026, 5, 24, 23, 0))._scene_bg(0)
+    assert any(img.getpixel((x, y)) == (220, 226, 246)
+               for x in range(40, 56) for y in range(0, 16))
+
+
+def test_moon_phase_varies_the_scene():
+    # a new-moon night (no moon) differs from a gibbous night (moon shown)
+    new = _night(datetime(2026, 5, 16, 23, 0))._scene_bg(0)
+    gibbous = _night(datetime(2026, 5, 24, 23, 0))._scene_bg(0)
+    assert new.tobytes() != gibbous.tobytes()

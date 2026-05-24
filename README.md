@@ -16,7 +16,8 @@ rotates in animated weather — all from free, **keyless** APIs (Open-Meteo + th
 
 ### 🌦 Weather & notifications
 Every 15 minutes the trains give way to an animated rundown: a scene matched to the current
-**conditions *and* time of day** (sun, clouds, rain, snow, night), the temp and today's
+**conditions *and* time of day** (sun, clouds, rain, snow, and a night sky whose moon tracks
+the real lunar phase), the temp and today's
 high/low, and flags that appear **only when they matter** — high UV, unhealthy AQI, and a
 precise precip window like **`RAIN til 2a`** with chance and amount. Plus animated
 sunrise/sunset notices and a `TRASH TMRW` reminder.

@@ -1,9 +1,14 @@
-from datetime import datetime
+import math
+from datetime import datetime, timedelta
 
 from transithub.weather.model import (
     Condition, condition_for_code, SunPhase, sun_phase, Weather, flags, Flag,
-    PrecipWindow, precip_window,
+    PrecipWindow, precip_window, moon_phase,
 )
+
+
+def _illum(phase):
+    return (1 - math.cos(2 * math.pi * phase)) / 2
 
 
 def _w(**kw):
@@ -59,6 +64,40 @@ def test_flag_trash_tomorrow():
     out = flags(_w(), datetime(2026, 5, 23, 18, 0), trash_days=["sunday"])
     assert Flag("TRASH TMRW", "") in out
     assert Flag("TRASH TMRW", "") not in flags(_w(), datetime(2026, 5, 23, 9, 0), ["sunday"])
+
+
+# --- moon phase (verified against moongiant.com / timeanddate.com) ---
+
+def test_moon_phase_new():
+    # New Moon ~May 16, 2026 -> barely illuminated, fraction near 0 (or 1)
+    p = moon_phase(datetime(2026, 5, 16, 12, 0))
+    assert min(p, 1 - p) < 0.02
+    assert _illum(p) < 0.02
+
+
+def test_moon_phase_first_quarter():
+    # First Quarter on May 23, 2026 (~50% lit, waxing)
+    p = moon_phase(datetime(2026, 5, 23, 12, 0))
+    assert abs(p - 0.25) < 0.02
+
+
+def test_moon_phase_full():
+    # Full Moon ~May 31, 2026
+    p = moon_phase(datetime(2026, 5, 31, 12, 0))
+    assert abs(p - 0.5) < 0.02
+
+
+def test_moon_phase_waxing_gibbous_today():
+    # May 24, 2026: Waxing Gibbous, ~63% illuminated per moongiant.com
+    p = moon_phase(datetime(2026, 5, 24, 12, 0))
+    assert 0.25 < p < 0.5                      # between first quarter and full -> waxing gibbous
+    assert 0.58 < _illum(p) < 0.66
+
+
+def test_moon_phase_always_in_range():
+    for day in range(1, 60):
+        p = moon_phase(datetime(2026, 1, 1) + timedelta(days=day))
+        assert 0.0 <= p < 1.0
 
 
 # --- precip window ---

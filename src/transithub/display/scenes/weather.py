@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 
 from PIL import Image
 
-from ...weather.model import Condition, SunPhase, sun_phase, flags
+from ...weather.model import Condition, SunPhase, sun_phase, moon_phase, flags
 from .. import scenery as S
 from .base import Scene
 
@@ -29,6 +29,7 @@ class WeatherScene(Scene):
         self.cols, self.rows = cols, rows
         self.duration_ms = rundown_seconds * 1000
         self.phase = sun_phase(now, weather.sunrise, weather.sunset)
+        self.moon_phase = moon_phase(now)
         # When it's actively raining/snowing, every slide shares the precip scene.
         self._wet = weather.condition in (Condition.RAIN, Condition.SNOW)
         self._flags = flags(weather, now, list(trash_days))
@@ -43,7 +44,7 @@ class WeatherScene(Scene):
         cond = self.w.condition
         if self.phase is SunPhase.NIGHT and cond in (Condition.CLEAR, Condition.CLOUDY):
             S.stars(img, frame)
-            S.moon(img, 46, 8, 4)
+            S.moon(img, 46, 9, 5, self.moon_phase)
         elif cond in (Condition.CLEAR, Condition.CLOUDY):
             if self.phase is SunPhase.DAY:   # bright golden sun, high in a blue sky
                 S.glow_sun(img, 46, 11, 8, color=(255, 210, 96), intensity=1.0)
