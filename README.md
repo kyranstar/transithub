@@ -1,6 +1,7 @@
 # TransitHub
 
 [![tests](https://github.com/kyranstar/transithub/actions/workflows/ci.yml/badge.svg)](https://github.com/kyranstar/transithub/actions/workflows/ci.yml)
+[![no API keys needed](https://img.shields.io/badge/API_keys-not_needed-2ea44f)](#)
 
 **Live NYC subway arrivals *and* weather on a Raspberry Pi LED matrix, styled like a real MTA sign.**
 

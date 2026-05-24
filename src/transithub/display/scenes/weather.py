@@ -45,9 +45,10 @@ class WeatherScene(Scene):
             S.stars(img, frame)
             S.moon(img, 46, 8, 4)
         elif cond in (Condition.CLEAR, Condition.CLOUDY):
-            cx = 44 if self.phase is SunPhase.DAY else 16
-            cy = 8 if self.phase is SunPhase.DAY else 22
-            S.glow_sun(img, cx, cy, 6, intensity=0.9)
+            if self.phase is SunPhase.DAY:   # bright golden sun, high in a blue sky
+                S.glow_sun(img, 46, 11, 8, color=(255, 210, 96), intensity=1.0)
+            else:                            # sunrise / sunset — low, warm sun
+                S.glow_sun(img, 16, 22, 7, intensity=0.95)
         if cond is Condition.CLOUDY:
             S.cloud(img, (20 + frame) % (self.cols + 30) - 8, 9, 22, (150, 156, 178), 0.7)
         elif cond is Condition.RAIN:
