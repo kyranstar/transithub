@@ -1,0 +1,16 @@
+[Unit]
+Description=TransitHub NYC subway LED sign
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/pi/transithub
+ExecStart=/home/pi/transithub/.venv/bin/transithub --config /home/pi/transithub/config.yaml
+Restart=always
+RestartSec=5
+# Matrix timing needs root; the binding drops privileges internally.
+User=root
+
+[Install]
+WantedBy=multi-user.target

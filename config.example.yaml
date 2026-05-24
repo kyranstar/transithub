@@ -1,0 +1,59 @@
+matrix:
+  rows: 32
+  cols: 64
+  chain_length: 1
+  parallel: 1
+  hardware_mapping: adafruit-hat
+  brightness: 60
+  gpio_slowdown: 2         # Pi 3: try 1; Pi 4: 3-4
+  pwm_bits: 11             # lower (7-8) raises refresh rate -> less flicker (Pi 3 esp.)
+  limit_refresh_rate_hz: 0 # 0 = unlimited; set ~100 to hold a steady rate (stops flicker from rate dips)
+  drop_privileges: false   # keep root after init; the matrix lib otherwise drops to
+                           # user 'daemon', which can't read the venv/fonts under $HOME
+
+mta:
+  poll_seconds: 30
+
+display:
+  arriving_threshold_seconds: 20   # under this, a train flashes "Now"
+  page_seconds: 6                  # base airtime for one screen (a weight=1 stop)
+  scroll_speed: 1
+
+alerts:
+  enabled: true      # show a DLY / RDCD / SUSP badge when a line is disrupted
+  poll_seconds: 60
+
+# --- Weather & notifications (free Open-Meteo, no API key) ---
+location:
+  latitude: 40.70      # your location for weather (lat/lon); example: central Brooklyn
+  longitude: -73.92
+
+weather:
+  enabled: true
+  units: fahrenheit          # or celsius
+  poll_seconds: 600
+  rundown_every_minutes: 15  # how often the weather rundown interrupts the trains
+  rundown_seconds: 60        # how long it runs
+
+notifications:
+  sunrise: true              # animated notice 30 min before -> 30 min after sunrise
+  sunset: true               # animated notice 45 min before -> 10 min after sunset
+
+trash:
+  days: ["monday"]           # TRASH TMRW shows 3pm–midnight the day before each
+
+# The sign rotates between the stops you list; whichever is showing fills the
+# screen with its next 2 trains. `weight` is each stop's relative share of screen
+# time, so 3 and 1 below give the L ~75% and the M ~25% (omit weight for equal).
+# Find stop IDs and which direction is which with:  scripts/find_station.py "<name>"
+trains:
+  - line: "L"
+    stop_id: "L16"      # DeKalb Av
+    direction: "N"      # toward Manhattan (8 Av)
+    destination: ""     # blank = live headsign; or set a short custom label
+    weight: 3
+  - line: "M"
+    stop_id: "M08"      # Myrtle-Wyckoff Avs
+    direction: "N"      # toward Manhattan
+    destination: ""
+    weight: 1

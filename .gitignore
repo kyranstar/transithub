@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+
+# App runtime
+config.yaml
+*.log
+
+# Simulator output (root-level scratch only; docs/preview.png is tracked)
+/preview.png
+*.preview.png
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
