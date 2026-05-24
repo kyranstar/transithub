@@ -25,7 +25,7 @@ sunrise/sunset notices and a `TRASH TMRW` reminder.
   <img src="docs/weather-rain-night.gif" width="47%" alt="RAIN til 2a, rain falling at night">
 </p>
 <p align="center">
-  <img src="docs/weather-scenes.png" width="94%" alt="Weather scenes: clear, cloudy, rain, snow, night, sunset">
+  <img src="docs/weather-scenes.png" width="100%" alt="Weather scenes: clear, cloudy, rain, snow, night, sunset">
 </p>
 
 ### ⚙️ Fully configurable
