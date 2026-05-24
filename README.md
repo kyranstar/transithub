@@ -54,7 +54,13 @@ and flash `Now` on arrival; correct NYC time even on a UTC Pi.
 | 5V 4A power supply, UL-listed — drives the panel | [#1466](https://www.adafruit.com/product/1466) | $14.95 |
 | **Total** | | **≈ $138** |
 
-*Adafruit list prices (USD), before tax/shipping.* You need **both** power supplies — the
+*Adafruit list prices (USD), before tax/shipping* — these are the convenient, known-good
+versions, but you can spend far less by shopping around (a generic HUB75 panel, an old Pi you
+already own, and any decent 5V supply). The only things you genuinely **need** are the **LED
+matrix** and a **Raspberry Pi** — the bonnet is just tidy wiring (you can jumper the panel to
+the Pi's GPIO by hand), and the second supply only matters once you push the panel bright.
+
+You need **both** power supplies — the
 panel pulls its 5V 4A from the bonnet's screw terminals while the Pi runs off its own
 micro-USB supply. Any **Pi 3 / 4 / Pi Zero 2 W** works (Pi 5 isn't supported by the matrix
 driver). Seat the bonnet on the Pi's GPIO header, plug the panel's ribbon + power into the
