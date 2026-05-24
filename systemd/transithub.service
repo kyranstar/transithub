@@ -9,7 +9,8 @@ WorkingDirectory=/home/pi/transithub
 ExecStart=/home/pi/transithub/.venv/bin/transithub --config /home/pi/transithub/config.yaml
 Restart=always
 RestartSec=5
-# Matrix timing needs root; the binding drops privileges internally.
+# Matrix timing needs root, and config's matrix.drop_privileges: false keeps it
+# so the app can still read the venv/fonts under the install dir.
 User=root
 
 [Install]

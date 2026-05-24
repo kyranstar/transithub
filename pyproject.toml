@@ -5,12 +5,12 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "transithub"
 version = "0.1.0"
-description = "NYC subway arrivals on a Raspberry Pi LED matrix, styled like a real MTA sign"
+description = "Live NYC subway arrivals and weather on a Raspberry Pi LED matrix, styled like a real MTA sign"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
 authors = [{ name = "Kyran Adams" }]
-keywords = ["nyc", "subway", "mta", "transit", "led-matrix", "rgb-matrix", "raspberry-pi"]
+keywords = ["nyc", "subway", "mta", "transit", "weather", "led-matrix", "rgb-matrix", "raspberry-pi"]
 classifiers = [
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
