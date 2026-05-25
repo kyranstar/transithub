@@ -198,7 +198,7 @@ class LineAlert:
     """One disruption affecting a tracked stop.
 
     `tag` is the glanceable badge (DLY/RDCD/SUSP); `reason` is a short cause phrase
-    (e.g. "SIGNALS", "SICK PASS") or "" when the cause isn't recognized.
+    (e.g. "SIGNAL PROBLEM", "SICK PASSENGER") or "" when the cause isn't recognized.
     """
     line: str
     tag: str
