@@ -69,21 +69,36 @@ _REASON_KEYWORDS: List[tuple[str, str]] = [
     ("signal maintenance", "SIGNAL WORK"),
     ("signal", "SIGNAL PROBLEM"),
     ("switch", "SWITCH PROBLEM"),
+    ("brake", "BRAKE PROBLEM"),               # +
     ("mechanical", "MECHANICAL PROBLEM"),
+    ("door problem", "DOOR PROBLEM"),          # +
     ("disabled train", "STALLED TRAIN"),
     ("track maintenance", "TRACK WORK"),
     ("replacing track", "TRACK WORK"),
     ("track work", "TRACK WORK"),
     ("track condition", "TRACK CONDITION"),
+    ("rail condition", "TRACK CONDITION"),     # +
     ("rubbish", "DEBRIS ON TRACK"),
     ("debris", "DEBRIS ON TRACK"),
     ("litter", "DEBRIS ON TRACK"),
     ("power", "POWER PROBLEM"),
     ("snow", "SNOW"),
     ("ice", "ICE"),
+    ("icy", "ICE"),                            # +
     ("weather", "WEATHER"),
     ("flooding", "FLOODING"),
     ("water condition", "FLOODING"),
+    ("water main", "FLOODING"),                # +
+    ("train traffic", "TRAIN TRAFFIC"),        # +
+    ("earlier incident", "EARLIER INCIDENT"),  # + (vague; kept last so specific reasons win)
+]
+
+# Precompiled left-anchored word-boundary patterns, in priority order. A LEFT
+# boundary (not a full \bword\b) is deliberate: it stops 'ice' from matching
+# 'serv-ice'/'office'/'notice' while still matching word continuations like
+# 'signal problem(s)' and 'snow(ing)'.
+_REASON_PATTERNS: List[tuple[re.Pattern, str]] = [
+    (re.compile(r"\b" + re.escape(kw)), label) for kw, label in _REASON_KEYWORDS
 ]
 
 
@@ -126,8 +141,8 @@ def parse_reason(text: str) -> str:
     m = _WHATS_HAPPENING_RE.search(text)
     haystacks = ([m.group(1).lower()] if m else []) + [low]
     for hay in haystacks:
-        for keyword, label in _REASON_KEYWORDS:
-            if keyword in hay:
+        for pattern, label in _REASON_PATTERNS:
+            if pattern.search(hay):
                 return label
     return ""
 

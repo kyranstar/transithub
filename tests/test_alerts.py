@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from transithub.models import TrackedTrain
 from transithub.mta.alerts import AlertsClient, LineAlert, parse_reason
 
@@ -166,3 +168,54 @@ def test_tags_for_trains_matches_alerts_for_trains_from_fixture():
     rich = c.alerts_for_trains(trains, now=NOW)
     tags = c.tags_for_trains(trains, now=NOW)
     assert tags == [a.tag if a else None for a in rich]
+
+
+# Real-world MTA phrasings -> expected reason. The messaging must hold up against
+# the actual prose the feed ships, not toy strings.
+REAL_REASON_CASES = [
+    ("Northbound [4] trains are delayed because of train traffic ahead of us.", "TRAIN TRAFFIC"),
+    ("[A] trains are delayed while we address a mechanical problem on a train.", "MECHANICAL PROBLEM"),
+    ("[2] trains are running with delays because of brake problems on a train.", "BRAKE PROBLEM"),
+    ("[7] service is delayed because of a door problem on a train.", "DOOR PROBLEM"),
+    ("[F] trains are delayed because of an earlier incident at Coney Island.", "EARLIER INCIDENT"),
+    ("Trains are delayed due to a rail condition near the station.", "TRACK CONDITION"),
+    ("[N] service is suspended because of a water main break in the area.", "FLOODING"),
+    ("[Q] trains are delayed because of icy conditions on the tracks.", "ICE"),
+    ("[L] trains are delayed because of a sick passenger at Bedford Av.", "SICK PASSENGER"),
+    ("Trains are delayed due to an NYPD investigation.", "POLICE"),
+    ("[M] trains are delayed while we address signal problems at Myrtle Av.", "SIGNAL PROBLEM"),
+    ("[6] trains are delayed because of FDNY activity.", "FDNY"),
+    ("[3] trains are delayed because of a switch problem.", "SWITCH PROBLEM"),
+    ("[D] trains are delayed because of a disabled train ahead.", "STALLED TRAIN"),
+    ("[B] trains are delayed because of a power problem.", "POWER PROBLEM"),
+]
+
+
+@pytest.mark.parametrize("text,expected", REAL_REASON_CASES)
+def test_parse_reason_real_world_phrasings(text, expected):
+    assert parse_reason(text) == expected
+
+
+def test_parse_reason_ignores_service_substring():
+    # The SUSP ICE bug: 'ice' must never match the 'serv·ice' (or office/notice) substring.
+    assert parse_reason("No scheduled service is running on this line") == ""
+    assert parse_reason("Service has been suspended") == ""
+    assert parse_reason("We are providing reduced service") == ""
+    assert parse_reason("Please notice the schedule change") == ""
+    assert parse_reason("Visit us at our office") == ""
+
+
+def test_parse_reason_matches_plurals_and_suffixes():
+    # Left-anchored boundary still matches word continuations (the reason we don't
+    # use a full \bword\b boundary, which would break these).
+    assert parse_reason("we are addressing signal problems") == "SIGNAL PROBLEM"
+    assert parse_reason("We're replacing tracks this weekend") == "TRACK WORK"
+    assert parse_reason("delays because it is snowing heavily") == "SNOW"
+
+
+def test_parse_reason_multiword_keywords_dont_overfire():
+    # The multi-word reasons must require the full phrase, not just the first word.
+    assert parse_reason("delays due to an earlier signal problem") == "SIGNAL PROBLEM"  # not EARLIER INCIDENT
+    assert parse_reason("there is heavy train ridership today") == ""                   # not TRAIN TRAFFIC
+    assert parse_reason("the train doors are closing") == ""                            # not DOOR PROBLEM
+    assert parse_reason("a water fountain is out of order") == ""                       # not FLOODING
