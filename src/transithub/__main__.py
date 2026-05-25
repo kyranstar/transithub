@@ -21,6 +21,8 @@ from .display.simulator import SimulatorDisplay
 from .display.director import Context, Director, Slot
 from .display.dimmer import Dimmer
 from .display.sources import HealthSource, SunEventSource, WeatherRundownSource
+from .birthdays import parse_specs as parse_birthday_specs
+from .display.scenes.birthday import BirthdaySource
 from .display.scenes.local import MarketSource
 from .display.scenes.sky import IssPassSource, MoonEventSource, PlaneOverheadSource
 from .display.scenes.space import EarthFromSpaceSource, HumansInSpaceSource
@@ -196,8 +198,17 @@ def _build_director(cfg, renderer, store, holders, health):
     market_specs = parse_specs(cfg.local.markets) if cfg.local.enabled else []
     if market_specs:
         slots.append(Slot(MarketSource(market_specs, cols, rows), priority=40,
-                          cooldown_ms=120 * 60_000, first_after_ms=3 * 60_000,
-                          profiles=DAY_EVENING))
+                          cooldown_ms=cfg.local.every_minutes * 60_000,
+                          first_after_ms=3 * 60_000, profiles=DAY_EVENING))
+    birthday_specs = parse_birthday_specs(cfg.birthdays.people) if cfg.birthdays.enabled else []
+    if birthday_specs:
+        # A personal, celebratory takeover. Active the whole calendar day (all
+        # profiles, from midnight); the night dimmer keeps the small hours gentle.
+        # interjection=False so the global anti-back-to-back gap can't suppress the
+        # fixed cadence; it waits for a free screen rather than cutting a scene.
+        slots.append(Slot(BirthdaySource(birthday_specs, cols, rows), priority=70,
+                          cooldown_ms=cfg.birthdays.every_minutes * 60_000,
+                          first_after_ms=60_000, interjection=False))
     # The "weird facts" are a few-times-a-day daytime/evening thing — quiet overnight.
     if cfg.space.enabled:
         if cfg.space.humans:
