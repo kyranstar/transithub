@@ -219,3 +219,28 @@ def test_parse_reason_multiword_keywords_dont_overfire():
     assert parse_reason("there is heavy train ridership today") == ""                   # not TRAIN TRAFFIC
     assert parse_reason("the train doors are closing") == ""                            # not DOOR PROBLEM
     assert parse_reason("a water fountain is out of order") == ""                       # not FLOODING
+
+
+# -- alerts_for_trains end-to-end (real feed shapes) -----------------------
+
+def test_full_message_real_alert_train_traffic():
+    c = _client([_alert(["L"], "Delays",
+        "Northbound [L] trains are delayed because of train traffic ahead of us.")])
+    [a] = c.alerts_for_trains([L_N], now=NOW)
+    assert a is not None and a.tag == "DLY" and a.reason == "TRAIN TRAFFIC"
+
+
+def test_full_message_suspended_service_is_not_ice():
+    # The exact failure the user saw: a suspension whose text only says "service"
+    # must render SUSP, never SUSP ICE.
+    c = _client([_alert(["M"], "Planned - Suspended",
+        "[M] service is suspended. Take the [J] and free shuttle buses instead.")])
+    [a] = c.alerts_for_trains([M_N], now=NOW)
+    assert a is not None and a.tag == "SUSP" and a.reason == ""
+
+
+def test_full_message_reduced_service_brake_problem():
+    c = _client([_alert(["M"], "Reduced Service",
+        "[M] trains are running with delays because of brake problems on a train.")])
+    [a] = c.alerts_for_trains([M_N], now=NOW)
+    assert a is not None and a.tag == "RDCD" and a.reason == "BRAKE PROBLEM"
