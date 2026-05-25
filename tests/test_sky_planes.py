@@ -28,20 +28,35 @@ def test_parse_skips_ground_low_and_null_alt():
 
 
 def test_nearest_plane_picks_closest_airborne():
+    # Slant-range ranking: the 8,175 ft UAL415 (the audible one) beats the
+    # 35,000 ft BAW178 that is nearer in horizontal distance but inaudible overhead.
     p = nearest_plane(ADSB, LAT, LON, min_alt_ft=1000)
     assert isinstance(p, Plane)
-    assert p.callsign == "BAW178"            # closest airborne above the floor
-    assert p.dir == "NE"                     # track 61 deg
-    assert p.alt_ft == 35000                 # alt_baro is feet already
+    assert p.callsign == "UAL415"            # smallest slant range above the floor
+    assert p.dir == "SW"                     # track 218 deg
+    assert p.alt_ft == 8175                  # alt_baro is feet already
     assert 0 <= p.heading_deg < 360
     assert p.route is None                   # parsing alone does not add a route
+
+
+def test_nearest_plane_ranks_by_slant_not_horizontal():
+    # A high jet nearly overhead vs a low plane slightly off-axis. Horizontal
+    # distance favors the high one; slant range (and audibility) favors the low one.
+    data = {"aircraft": [
+        {"flight": "HIGH1", "alt_baro": 35000, "track": 90.0,
+         "lat": LAT + 0.002, "lon": LON},   # ~0.2 km horizontally, but 35,000 ft up
+        {"flight": "LOW1", "alt_baro": 2000, "track": 90.0,
+         "lat": LAT + 0.02, "lon": LON},    # ~2.2 km horizontally, but only 2,000 ft up
+    ]}
+    p = nearest_plane(data, LAT, LON, min_alt_ft=1000)
+    assert p is not None and p.callsign == "LOW1"
 
 
 def test_nearest_plane_handles_adsb_lol_ac_key():
     # adsb.lol / airplanes.live return the array under "ac" instead of "aircraft".
     data = {"ac": ADSB["aircraft"]}
     p = nearest_plane(data, LAT, LON, key="ac", min_alt_ft=1000)
-    assert p is not None and p.callsign == "BAW178"
+    assert p is not None and p.callsign == "UAL415"
 
 
 def test_nearest_plane_empty_and_missing():
@@ -131,7 +146,7 @@ def test_fetch_overhead_primary_with_route():
     p = fetch_overhead(LAT, LON, fetcher=lambda url: ADSB,
                        route_fetcher=lambda url: ROUTE)
     assert isinstance(p, Plane)
-    assert p.callsign == "BAW178" and p.route == "JFK > LHR"
+    assert p.callsign == "UAL415" and p.route == "JFK > LHR"
 
 
 def test_fetch_overhead_falls_back_to_second_feed():
@@ -143,7 +158,7 @@ def test_fetch_overhead_falls_back_to_second_feed():
         return lol
 
     p = fetch_overhead(LAT, LON, fetcher=flaky, route_fetcher=lambda url: ROUTE)
-    assert p is not None and p.callsign == "BAW178"
+    assert p is not None and p.callsign == "UAL415"
 
 
 def test_fetch_overhead_all_feeds_down_returns_none():
@@ -157,4 +172,4 @@ def test_fetch_overhead_keeps_plane_when_route_unavailable():
     notfound = {"status": "404", "error": "Route not found."}
     p = fetch_overhead(LAT, LON, fetcher=lambda url: ADSB,
                        route_fetcher=lambda url: notfound)
-    assert p is not None and p.callsign == "BAW178" and p.route is None
+    assert p is not None and p.callsign == "UAL415" and p.route is None

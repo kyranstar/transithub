@@ -124,7 +124,7 @@ def _aircraft_list(data: dict, key: str) -> list:
 
 def _row_to_plane(a: dict, lat: float, lon: float, min_alt_ft: float,
                   max_alt_ft: Optional[float] = None):
-    """(distance_deg, Plane) for a usable airborne row, else None.
+    """(slant_m, Plane) for a usable airborne row, else None.
 
     Skips on-ground craft (``alt_baro == "ground"``), rows missing a position or
     altitude, anything below the floor, and (when ``max_alt_ft`` is set) anything
@@ -150,13 +150,17 @@ def _row_to_plane(a: dict, lat: float, lon: float, min_alt_ft: float,
             track = a.get("true_heading")
         heading = float(track) if isinstance(track, (int, float)) else 0.0
         callsign = (a.get("flight") or "").strip() or "UNKNOWN"
-        # planar distance in degrees, longitude scaled by latitude
+        # Rank by slant range (true 3D distance), so a low, near plane beats a high
+        # one passing overhead — the low one is the one you'd actually hear. Horizontal
+        # offset is planar (longitude scaled by latitude); both legs converted to metres
+        # (~111,320 m per degree of latitude, 0.3048 m per foot).
         dlat = plat - lat
         dlon = (plon - lon) * math.cos(math.radians(lat))
-        dist = math.hypot(dlat, dlon)
+        horizontal_m = math.hypot(dlat, dlon) * 111_320
+        slant_m = math.hypot(horizontal_m, alt_ft * 0.3048)
         plane = Plane(callsign=callsign, alt_ft=int(round(alt_ft)),
                       heading_deg=heading, dir=_heading_to_compass(heading))
-        return dist, plane
+        return slant_m, plane
     except (TypeError, ValueError):
         return None
 
