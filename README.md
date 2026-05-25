@@ -24,9 +24,10 @@ time; the trains are always the backbone.
 
 ### 🚇 Trains first
 Real MTA GTFS-realtime arrivals (no key) for **any line, stop, and direction** you list,
-**weighted** by screen time; **direction-aware** DLY / RDCD / SUSP badges that won't flag the
-wrong way; clean countdowns that never show `0m` and flash `Now` on arrival. Disruptions now
-say *why* — `SIGNALS`, `SICK PASS`, `FDNY`, `TRACK WORK` — parsed from the alert text.
+**weighted** by screen time; clean countdowns that never show `0m` and flash `Now` on arrival.
+The **direction-aware** DLY / RDCD / SUSP badge (that won't flag the wrong way) now says *why*,
+**right on the row** — `DLY SIGNALS`, `SUSP SICK PASS`, `FDNY`, `TRACK WORK` — parsed from the
+alert text, no separate screen.
 
 ### 🌦 Weather & advisories
 An animated rundown matched to the **conditions and time of day** (sun, clouds, rain, snow,

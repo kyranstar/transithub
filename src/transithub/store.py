@@ -6,7 +6,7 @@ from .mta.alerts import LineAlert
 
 
 class ArrivalStore:
-    """Thread-safe shared state: arrivals and an alert tag per tracked stop.
+    """Thread-safe shared state: arrivals and a disruption alert per tracked stop.
 
     Written by the poller threads, read by the renderer.
     """
@@ -14,7 +14,6 @@ class ArrivalStore:
     def __init__(self, n_trains: int):
         self._lock = threading.Lock()
         self._data: List[List[Arrival]] = [[] for _ in range(n_trains)]
-        self._alerts: List[Optional[str]] = [None] * n_trains
         self._line_alerts: List[Optional[LineAlert]] = [None] * n_trains
 
     def set(self, index: int, arrivals: List[Arrival]) -> None:
@@ -25,17 +24,8 @@ class ArrivalStore:
         with self._lock:
             return [list(x) for x in self._data]
 
-    def set_alerts(self, tags: List[Optional[str]]) -> None:
-        with self._lock:
-            self._alerts = list(tags)
-
-    def alerts(self) -> List[Optional[str]]:
-        with self._lock:
-            return list(self._alerts)
-
     def set_line_alerts(self, alerts: List[Optional[LineAlert]]) -> None:
-        """Rich per-stop alerts (tag + reason) for the AlertScene. Additive: the
-        string-tag view via `set_alerts`/`alerts` is unchanged."""
+        """One `LineAlert` (tag + short reason) or None per tracked stop."""
         with self._lock:
             self._line_alerts = list(alerts)
 

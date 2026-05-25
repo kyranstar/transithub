@@ -21,7 +21,6 @@ from .display.simulator import SimulatorDisplay
 from .display.director import Context, Director, Slot
 from .display.dimmer import Dimmer
 from .display.sources import HealthSource, SunEventSource, WeatherRundownSource
-from .display.scenes.alert import AlertSource
 from .display.scenes.local import MarketSource
 from .display.scenes.sky import IssPassSource, MoonEventSource, PlaneOverheadSource
 from .display.scenes.space import EarthFromSpaceSource, HumansInSpaceSource
@@ -51,9 +50,7 @@ def _poller(stop_event, store, client, trains, poll_seconds, health=None):
 def _alerts_poller(stop_event, store, client, trains, poll_seconds, health=None):
     while not stop_event.is_set():
         try:
-            line_alerts = client.alerts_for_trains(trains)
-            store.set_line_alerts(line_alerts)
-            store.set_alerts([a.tag if a else None for a in line_alerts])
+            store.set_line_alerts(client.alerts_for_trains(trains))
             if health is not None:
                 health.ok("alerts")
         except Exception as exc:  # keep last good tags, keep running
@@ -177,9 +174,8 @@ def _build_director(cfg, renderer, store, holders, health):
             Slot(MoonEventSource(cols, rows), priority=80, cooldown_ms=12 * 3_600_000,
                  takeover=False, interjection=False, profiles=AFTER_DARK),
         ]
-    if cfg.alerts.enabled:
-        slots.append(Slot(AlertSource(store.line_alerts, cols, rows),
-                          priority=70, cooldown_ms=90_000))
+    # Disruptions are shown inline on the train sign (tag + reason), not as a
+    # separate scene — so there's no alert slot here.
     if cfg.notifications.sunrise or cfg.notifications.sunset:
         slots.append(Slot(SunEventSource(make_sun, cfg.notifications.sunrise,
                                          cfg.notifications.sunset),
@@ -261,9 +257,7 @@ def main(argv=None):
                 print(f"[poll] {train.line}: {exc}")
         if alerts_client:
             try:
-                line_alerts = alerts_client.alerts_for_trains(cfg.trains)
-                store.set_line_alerts(line_alerts)
-                store.set_alerts([a.tag if a else None for a in line_alerts])
+                store.set_line_alerts(alerts_client.alerts_for_trains(cfg.trains))
             except Exception as exc:
                 print(f"[alerts] {exc}")
         display.render(director.render(now_eastern(), 0))

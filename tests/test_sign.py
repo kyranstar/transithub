@@ -6,6 +6,7 @@ from transithub.display.sign import (
     format_time, build_schedule, pick_page, Panel, SignRenderer,
 )
 from transithub.display.bullets import line_color
+from transithub.mta.alerts import LineAlert
 
 NOW = datetime(2026, 5, 23, 12, 0, 0)
 
@@ -86,7 +87,8 @@ def test_suspended_line_gets_half_weight():
                  trains=[TrackedTrain("L", "L16", "N", weight=2),
                          TrackedTrain("M", "M09", "N", weight=2)])
     r = SignRenderer(cfg)
-    panels = r._build_panels([[_arr(2)], [_arr(5, line="M")]], tags=[None, "SUSP"], now=NOW)
+    panels = r._build_panels([[_arr(2)], [_arr(5, line="M")]],
+                             alerts=[None, LineAlert("M", "SUSP", "")], now=NOW)
     assert panels[0].weight == 2.0          # L running -> full weight
     assert panels[1].weight == 1.0          # M suspended -> halved
 
@@ -110,7 +112,7 @@ def _colors(img):
 
 def test_badge_shows_countdown_in_time_window():
     r = _renderer()
-    img = r.render([[_arr(2)]], tick_ms=0, now=NOW, tags=["DLY"])
+    img = r.render([[_arr(2)]], tick_ms=0, now=NOW, alerts=[LineAlert("L", "DLY", "")])
     cols = _colors(img)
     assert _AMBER in cols           # countdown shown early in the cycle
     assert _ALERT_RED not in cols   # tag not shown yet
@@ -118,18 +120,48 @@ def test_badge_shows_countdown_in_time_window():
 
 def test_badge_flashes_tag_later_in_window():
     r = _renderer()
-    img = r.render([[_arr(2)]], tick_ms=3600, now=NOW, tags=["DLY"])
+    img = r.render([[_arr(2)]], tick_ms=3600, now=NOW, alerts=[LineAlert("L", "DLY", "")])
     assert _ALERT_RED in _colors(img)   # tag flashed in its slice of the cycle
 
 
 def test_suspended_row_shows_steady_tag():
     cfg = Config(matrix=MatrixConfig(rows=32, cols=64), display=DisplayConfig(),
                  trains=[TrackedTrain(line="L", stop_id="L16", direction="N")])
-    img = SignRenderer(cfg).render([[]], tick_ms=0, now=NOW, tags=["SUSP"])
+    img = SignRenderer(cfg).render([[]], tick_ms=0, now=NOW, alerts=[LineAlert("L", "SUSP", "")])
     assert _ALERT_RED in _colors(img)   # SUSP tag shown even with no arrivals
 
 
 def test_no_alert_means_no_badge():
     r = _renderer()
-    img = r.render([[_arr(2)]], tick_ms=3600, now=NOW)  # no tags arg
+    img = r.render([[_arr(2)]], tick_ms=3600, now=NOW)  # no alerts arg
     assert _ALERT_RED not in _colors(img)
+
+
+def test_delay_reason_shown_inline_during_flash():
+    r = _renderer()
+    # In the flash slice a known reason replaces the headsign, so the frame differs
+    # from the same delay with no reason — the reason rides the existing badge.
+    with_reason = r.render([[_arr(2)]], tick_ms=3600, now=NOW,
+                           alerts=[LineAlert("L", "DLY", "SIGNALS")])
+    no_reason = r.render([[_arr(2)]], tick_ms=3600, now=NOW,
+                         alerts=[LineAlert("L", "DLY", "")])
+    assert with_reason.tobytes() != no_reason.tobytes()
+
+
+def test_delay_reason_hidden_during_countdown():
+    r = _renderer()
+    # Early in the cycle it's the normal countdown + headsign; the reason is hidden,
+    # so a reason changes nothing here.
+    plain = r.render([[_arr(2)]], tick_ms=0, now=NOW, alerts=[LineAlert("L", "DLY", "")])
+    reason = r.render([[_arr(2)]], tick_ms=0, now=NOW, alerts=[LineAlert("L", "DLY", "SIGNALS")])
+    assert plain.tobytes() == reason.tobytes()
+
+
+def test_suspended_reason_replaces_no_service():
+    cfg = Config(matrix=MatrixConfig(rows=32, cols=64), display=DisplayConfig(),
+                 trains=[TrackedTrain(line="L", stop_id="L16", direction="N")])
+    with_reason = SignRenderer(cfg).render([[]], tick_ms=0, now=NOW,
+                                           alerts=[LineAlert("L", "SUSP", "SIGNALS")])
+    plain = SignRenderer(cfg).render([[]], tick_ms=0, now=NOW,
+                                     alerts=[LineAlert("L", "SUSP", "")])
+    assert with_reason.tobytes() != plain.tobytes()    # reason shown instead of "No service"
