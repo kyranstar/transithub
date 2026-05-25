@@ -73,19 +73,21 @@ def _weather_poller(stop_event, holder, client, poll_seconds, health=None):
         stop_event.wait(poll_seconds)
 
 
-def _sky_poller(stop_event, holder, client):
+def _sky_poller(stop_event, holder, client, fetch_iss=True, fetch_plane=True):
     """Planes refresh fast (one is overhead for seconds); the ISS pass is good for
-    minutes. Both degrade to None on error — best-effort, never noisy."""
+    minutes. Each feed is fetched only if its scene is enabled, and degrades to None
+    on error — best-effort, never noisy."""
     iss = None
     last_iss = None
     while not stop_event.is_set():
-        try:
-            plane = client.plane_overhead()
-        except Exception as exc:
-            print(f"[sky] plane: {exc}")
-            plane = None
+        plane = None
+        if fetch_plane:
+            try:
+                plane = client.plane_overhead()
+            except Exception as exc:
+                print(f"[sky] plane: {exc}")
         mono = time.monotonic()
-        if last_iss is None or mono - last_iss >= SKY_POLL["iss"]:
+        if fetch_iss and (last_iss is None or mono - last_iss >= SKY_POLL["iss"]):
             try:
                 iss = client.iss_pass()
                 last_iss = mono
@@ -95,16 +97,17 @@ def _sky_poller(stop_event, holder, client):
         stop_event.wait(SKY_POLL["plane"])
 
 
-def _space_poller(stop_event, holder, client, now_fn=now_eastern):
-    """Humans-in-space + EPIC Earth, polled slowly. The humans count holds across
-    brief outages but is dropped once it hasn't been confirmed in HUMANS_STALE_DAYS,
-    so a months-old number never lingers on screen."""
+def _space_poller(stop_event, holder, client, fetch_humans=True, fetch_earth=True,
+                  now_fn=now_eastern):
+    """Humans-in-space + EPIC Earth, polled slowly (each only if enabled). The humans
+    count holds across brief outages but is dropped once it hasn't been confirmed in
+    HUMANS_STALE_DAYS, so a months-old number never lingers on screen."""
     humans = earth = None
     humans_at = None                      # wall-clock of the last good humans fetch
     last_h = last_e = None
     while not stop_event.is_set():
         mono = time.monotonic()
-        if last_h is None or mono - last_h >= HUMANS_POLL_S:
+        if fetch_humans and (last_h is None or mono - last_h >= HUMANS_POLL_S):
             try:
                 got = client.humans()
             except Exception as exc:
@@ -116,7 +119,7 @@ def _space_poller(stop_event, holder, client, now_fn=now_eastern):
         if humans is not None and humans_at is not None and \
                 (now_fn() - humans_at).days >= HUMANS_STALE_DAYS:
             humans = None                 # unconfirmed too long -> stop showing it
-        if last_e is None or mono - last_e >= EARTH_POLL_S:
+        if fetch_earth and (last_e is None or mono - last_e >= EARTH_POLL_S):
             try:
                 earth = client.earth()
                 last_e = mono
@@ -166,14 +169,18 @@ def _build_director(cfg, renderer, store, holders, health):
     slots = [Slot(HealthSource(cols, rows), priority=100, cooldown_ms=120_000,
                   takeover=True, interjection=False)]
     if cfg.sky.enabled:
-        slots += [
-            Slot(IssPassSource(cols, rows), priority=90, cooldown_ms=75_000,
-                 takeover=True, interjection=False),
-            Slot(PlaneOverheadSource(cols, rows), priority=85, cooldown_ms=45_000,
-                 takeover=True, interjection=False),
-            Slot(MoonEventSource(cols, rows), priority=80, cooldown_ms=12 * 3_600_000,
-                 takeover=False, interjection=False, profiles=AFTER_DARK),
-        ]
+        # ISS + planes may take over any time (cool day or night); the cooldowns keep
+        # a single ISS pass or a steady stream of planes from hogging the screen.
+        if cfg.sky.iss:
+            slots.append(Slot(IssPassSource(cols, rows), priority=90,
+                              cooldown_ms=240_000, takeover=True, interjection=False))
+        if cfg.sky.planes:
+            slots.append(Slot(PlaneOverheadSource(cols, rows), priority=85,
+                              cooldown_ms=480_000, takeover=True, interjection=False))
+        if cfg.sky.moon:
+            slots.append(Slot(MoonEventSource(cols, rows), priority=80,
+                              cooldown_ms=12 * 3_600_000, takeover=False,
+                              interjection=False, profiles=AFTER_DARK))
     # Disruptions are shown inline on the train sign (tag + reason), not as a
     # separate scene — so there's no alert slot here.
     if cfg.notifications.sunrise or cfg.notifications.sunset:
@@ -187,15 +194,18 @@ def _build_director(cfg, renderer, store, holders, health):
     market_specs = parse_specs(cfg.local.markets) if cfg.local.enabled else []
     if market_specs:
         slots.append(Slot(MarketSource(market_specs, cols, rows), priority=40,
-                          cooldown_ms=30 * 60_000, first_after_ms=3 * 60_000,
+                          cooldown_ms=120 * 60_000, first_after_ms=3 * 60_000,
                           profiles=DAY_EVENING))
+    # The "weird facts" are a few-times-a-day daytime/evening thing — quiet overnight.
     if cfg.space.enabled:
-        slots += [
-            Slot(HumansInSpaceSource(cols, rows), priority=30,
-                 cooldown_ms=45 * 60_000, first_after_ms=4 * 60_000),
-            Slot(EarthFromSpaceSource(cols, rows), priority=30,
-                 cooldown_ms=60 * 60_000, first_after_ms=6 * 60_000),
-        ]
+        if cfg.space.humans:
+            slots.append(Slot(HumansInSpaceSource(cols, rows), priority=30,
+                              cooldown_ms=180 * 60_000, first_after_ms=4 * 60_000,
+                              profiles=DAY_EVENING))
+        if cfg.space.earth:
+            slots.append(Slot(EarthFromSpaceSource(cols, rows), priority=30,
+                              cooldown_ms=180 * 60_000, first_after_ms=6 * 60_000,
+                              profiles=DAY_EVENING))
 
     def context_builder(now, mono_ms):
         w = weather_holder.get()
@@ -276,13 +286,16 @@ def main(argv=None):
         threading.Thread(target=_weather_poller, daemon=True,
                          args=(stop_event, holders["weather"], weather_client,
                                cfg.weather.poll_seconds, health)).start()
-    if cfg.sky.enabled:
+    if cfg.sky.enabled and (cfg.sky.iss or cfg.sky.planes):   # the moon needs no poller
+        sky_client = SkyClient(cfg.location.latitude, cfg.location.longitude,
+                               radius_nm=cfg.sky.plane_radius_nm)
         threading.Thread(target=_sky_poller, daemon=True,
-                         args=(stop_event, holders["sky"],
-                               SkyClient(cfg.location.latitude, cfg.location.longitude))).start()
-    if cfg.space.enabled:
+                         args=(stop_event, holders["sky"], sky_client,
+                               cfg.sky.iss, cfg.sky.planes)).start()
+    if cfg.space.enabled and (cfg.space.humans or cfg.space.earth):
         threading.Thread(target=_space_poller, daemon=True,
-                         args=(stop_event, holders["space"], SpaceClient())).start()
+                         args=(stop_event, holders["space"], SpaceClient(),
+                               cfg.space.humans, cfg.space.earth)).start()
 
     frame_dt = 1.0 / max(1, args.fps)
     start = time.monotonic()

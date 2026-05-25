@@ -33,7 +33,7 @@ ADSB_SOURCES: Tuple[Tuple[str, str], ...] = (
 # Keyless route lookup: GET .../route/icao/<callsign> -> {"route": "KJFK-EGLL"}.
 ROUTE_URL = "https://hexdb.io/api/v1/route/icao/{callsign}"
 
-DEFAULT_RADIUS_NM = 12             # ~14 mi search radius around the spot
+DEFAULT_RADIUS_NM = 3              # ~3.5 mi: close enough to genuinely be "above you"
 DEFAULT_MIN_ALT_FT = 1000          # ignore aircraft on approach/departure on the deck
 COMPASS = ("N", "NE", "E", "SE", "S", "SW", "W", "NW")
 

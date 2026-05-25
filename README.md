@@ -132,9 +132,10 @@ python scripts/find_station.py "dekalb"
 ```
 
 `config.example.yaml` also covers your `location`, `weather`, **`night`** dimming (bedtime +
-how dim it gets), the **`sky`/`space`/`local`** ambient toggles (`local.markets` is your
-short curated list of nearby markets), `notifications`/`trash`, and the
-`matrix`/`display`/`alerts` tuning knobs — every source stays keyless.
+how dim it gets), the **`sky`/`space`/`local`** sections (toggle each ambient scene — ISS,
+planes, moon, humans-in-space, Earth — tune `sky.plane_radius_nm`, and list your nearby markets
+in `local.markets`), `notifications`/`trash`, and the `matrix`/`display`/`alerts` tuning knobs —
+every source stays keyless.
 
 ## Develop & preview (no hardware)
 

@@ -9,7 +9,7 @@ from transithub.config import Config, LocalConfig
 from transithub.display.sign import SignRenderer
 from transithub.health import HealthMonitor
 from transithub.models import TrackedTrain
-from transithub.sky import SkyData
+from transithub.sky import Plane, SkyData
 from transithub.space import SpaceData
 from transithub.space.humans import HumansInSpace
 from transithub.store import ArrivalStore, Holder, WeatherHolder
@@ -71,6 +71,18 @@ def test_calm_day_is_almost_all_trains():
     seen = _run(_director(_holders(weather=_weather())))
     assert set(seen) <= {"TrainScene", "WeatherScene"}
     assert seen["TrainScene"] > seen["WeatherScene"]
+
+
+def test_constant_plane_overhead_does_not_dominate():
+    # Even with a plane always in range (the NYC reality), the long cooldown keeps it
+    # a small slice and the trains stay the backbone — regression for the old config
+    # where a plane preempted the trains roughly every minute.
+    holders = _holders(weather=_weather())
+    holders["sky"] = Holder(SkyData(
+        plane_overhead=Plane("BAW178", 35000, 45.0, "NE", route="JFK > LHR")))
+    seen = _run(_director(holders))
+    assert seen["TrainScene"] == max(seen.values())
+    assert seen.get("PlaneOverheadScene", 0) <= seen["TrainScene"] // 5
 
 
 def test_night_dims_the_frame():

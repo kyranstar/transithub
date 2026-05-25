@@ -106,8 +106,9 @@ loop.
 - **EVENING** — sunset until bedtime (~21:30).
 - **NIGHT** — bedtime until sunrise.
 
-The profile both gates slots (the market is a daytime thing; the moon is a night
-thing) and drives the **dimmer**, which scales the final frame's brightness so the panel
+The profile both gates slots (the market and the fun facts are daytime/evening; the
+moon is a night thing; ISS passes and planes show any time) and drives the
+**dimmer**, which scales the final frame's brightness so the panel
 isn't a nightlight-from-hell at 3am:
 
 - DAY → full configured brightness.

@@ -50,7 +50,7 @@ class WeatherConfig:
     enabled: bool = True
     units: str = "fahrenheit"
     poll_seconds: int = 600
-    rundown_every_minutes: int = 6     # how often the weather rundown interrupts
+    rundown_every_minutes: int = 7     # how often the weather rundown interrupts
     rundown_rounds: int = 2            # full passes of the slide deck per rundown
 
 
@@ -71,12 +71,18 @@ class NightConfig:
 
 @dataclass
 class SkyConfig:
-    enabled: bool = True     # ISS passes, planes overhead, full/new-moon nights
+    enabled: bool = True            # master switch for the sky scenes
+    iss: bool = True                # ISS pass heads-up + overhead arc
+    planes: bool = True             # a plane passing directly overhead
+    moon: bool = True               # full / new-moon-night salute
+    plane_radius_nm: float = 3.0    # how close a plane must be to count as "overhead"
 
 
 @dataclass
 class SpaceConfig:
-    enabled: bool = True     # humans-in-space fact + NASA EPIC Earth image
+    enabled: bool = True            # master switch for the space interjections
+    humans: bool = True             # "N humans in space" fact
+    earth: bool = True              # NASA EPIC photo of Earth
 
 
 @dataclass

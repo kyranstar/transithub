@@ -116,3 +116,27 @@ def test_multiple_specs_picks_the_open_one():
 def test_empty_specs_is_none():
     assert market_today([], IN_SEASON_SAT) is None
     assert market_today(parse_specs([]), IN_SEASON_SAT) is None
+
+
+# --- daily close-time gating ----------------------------------------------
+def test_closed_after_until_hour_is_none():
+    # MARIA runs "until 3" -> open at 2pm, gone by 3pm, not lingering at 8pm.
+    specs = parse_specs([MARIA])
+    assert market_today(specs, datetime(2026, 5, 30, 14, 0)) is not None   # 2pm: open
+    assert market_today(specs, datetime(2026, 5, 30, 15, 0)) is None       # 3pm: closed
+    assert market_today(specs, datetime(2026, 5, 30, 20, 0)) is None       # 8pm: closed
+
+
+def test_close_hour_parsing():
+    from transithub.local.markets import _close_hour
+    assert _close_hour("3") == 15            # bare number -> afternoon/evening
+    assert _close_hour("6") == 18
+    assert _close_hour("noon") == 12
+    assert _close_hour("11 AM") == 11
+    assert _close_hour("") is None           # unreadable -> no daily cutoff
+
+
+def test_market_without_until_has_no_cutoff():
+    # No "until" label -> shows all day on its market day (no close gating).
+    specs = parse_specs([{"name": "ALLDAY", "day": "saturday"}])
+    assert market_today(specs, datetime(2026, 5, 30, 23, 0)) is not None

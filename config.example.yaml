@@ -32,7 +32,7 @@ weather:
   enabled: true
   units: fahrenheit          # or celsius
   poll_seconds: 600
-  rundown_every_minutes: 6   # how often the weather rundown interrupts the trains
+  rundown_every_minutes: 7   # how often the weather rundown interrupts the trains
   rundown_rounds: 2          # full passes of the rundown's slides each time
 
 notifications:
@@ -50,9 +50,15 @@ night:
 # Ambient extras, all from free keyless feeds. Each is event-driven or occasional
 # and yields to the trains — see docs/scene-framework.md.
 sky:
-  enabled: true              # ISS passes (LOOK NW), planes overhead, full/new-moon nights
+  enabled: true              # master switch for the sky scenes (toggle each below)
+  iss: true                  # ISS pass: a "LOOK NW" heads-up, then an overhead arc
+  planes: true               # a plane passing directly overhead (ABOVE YOU / JFK > LHR)
+  moon: true                 # a brief salute on full- and new-moon nights
+  plane_radius_nm: 3         # how close (nautical miles) a plane must be to count as overhead
 space:
-  enabled: true              # "N humans in space" fact + a NASA EPIC photo of Earth
+  enabled: true              # master switch for the space interjections (toggle each below)
+  humans: true               # an occasional "N humans in space" fact
+  earth: true                # an occasional real NASA EPIC photo of Earth
 local:
   enabled: true              # show a nearby farmers market that's open today
   markets:                   # your local market(s) — edit/add your own

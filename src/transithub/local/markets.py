@@ -54,6 +54,7 @@ class MarketSpec:
     until: str
     season_start: Optional[date] = None
     season_end: Optional[date] = None
+    close_hour: Optional[int] = None   # 24h hour it closes; None = no daily cutoff
 
     def open_on(self, day: date, weekday: int) -> bool:
         """True when this market runs on ``weekday`` and ``day`` is in season."""
@@ -92,6 +93,31 @@ def _parse_season(season) -> tuple[Optional[date], Optional[date]]:
     return (None, None)
 
 
+def _close_hour(until: str) -> Optional[int]:
+    """The 24-hour closing hour implied by an ``until`` label ("3" -> 15, "noon" ->
+    12, "6 PM" -> 18), so a market stops showing once it's closed. Bare numbers read
+    as afternoon/evening (1..11 -> PM), matching how markets actually run; an
+    unreadable label means no daily cutoff."""
+    s = (until or "").strip().lower()
+    if not s:
+        return None
+    if "noon" in s:
+        return 12
+    m = re.search(r"\d{1,2}", s)
+    if not m:
+        return None
+    h = int(m.group())
+    if not 0 <= h <= 23:
+        return None
+    if "am" in s:
+        return h % 12
+    if "pm" in s:
+        return 12 if h == 12 else (h % 12) + 12
+    if h == 12:
+        return 12
+    return h + 12 if 1 <= h <= 11 else h   # bare 1..11 -> afternoon/evening close
+
+
 def parse_specs(entries) -> List[MarketSpec]:
     """Parse a list of plain config dicts into ``MarketSpec``s.
 
@@ -112,21 +138,26 @@ def parse_specs(entries) -> List[MarketSpec]:
         until = str(entry.get("until", "")).strip()
         start, end = _parse_season(entry.get("season"))
         specs.append(MarketSpec(name=name, weekday=weekday, until=until,
-                                season_start=start, season_end=end))
+                                season_start=start, season_end=end,
+                                close_hour=_close_hour(until)))
     return specs
 
 
 def market_today(specs: List[MarketSpec], now: datetime) -> Optional[Market]:
-    """The configured market open *today*, or None.
+    """The configured market open *right now*, or None.
 
-    "Today" means ``now``'s weekday matches the spec's day AND ``now.date()`` is
-    within ``[season_start, season_end]`` inclusive. If several specs match, the
-    first one wins."""
+    Open means ``now``'s weekday matches the spec's day, ``now.date()`` is within
+    ``[season_start, season_end]`` inclusive, AND it's before the close hour — so a
+    market that ran "UNTIL 3" stops showing at 3pm instead of lingering all evening.
+    If several specs match, the first one wins."""
     today = now.date()
     weekday = now.weekday()
     for spec in specs:
-        if spec.open_on(today, weekday):
-            return Market(name=spec.name, until=spec.until)
+        if not spec.open_on(today, weekday):
+            continue
+        if spec.close_hour is not None and now.hour >= spec.close_hour:
+            continue                       # market day, but already closed for today
+        return Market(name=spec.name, until=spec.until)
     return None
 
 

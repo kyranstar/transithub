@@ -17,7 +17,7 @@ from .planes import _default_fetch as _default_json_fetch
 from .planes import fetch_overhead
 
 # Recommended poll cadences for the coordinator (seconds).
-POLL_INTERVALS = {"iss": 300, "plane": 45}
+POLL_INTERVALS = {"iss": 300, "plane": 90}
 
 _TLE_TTL_S = 12 * 3600          # a TLE stays accurate for ~half a day
 _PASS_LOOKAHEAD_H = 6.0         # search this far ahead for the next pass
