@@ -29,6 +29,7 @@ LOCATIONS = "cpcm-i88g"
 CATEGORIES = "xtsw-fqvh"
 
 MAX_EVENTS = 6        # keep the rotation small and curated
+_SAFE_ID = re.compile(r"[A-Za-z0-9_-]+")    # event_ids safe to put in a SoQL clause
 
 # Explicit grown-up audience tags. Only these override a "Best for Kids" flag —
 # topic tags like "Film" or "Concerts" don't, since a children's movie is still
@@ -219,8 +220,11 @@ class EventsClient:
 
     def _by_id(self, resource: str, event_ids) -> List[dict]:
         url = self._url(resource)
-        if event_ids:        # scope the join tables to just the events we kept
-            ids = ",".join(f"'{e}'" for e in sorted(event_ids))
+        # Only interpolate well-formed ids into the SoQL clause; a stray quote
+        # would otherwise break (or, in theory, inject into) the query.
+        safe = sorted(e for e in event_ids if _SAFE_ID.fullmatch(e))
+        if safe:             # scope the join tables to just the events we kept
+            ids = ",".join(f"'{e}'" for e in safe)
             url = self._url(resource, **{"$where": f"event_id in ({ids})"})
         try:
             rows = self._fetch(url)

@@ -93,8 +93,10 @@ class Director:
         self._active_start = mono_ms
         self._active_priority = slot.priority
         self._last_play[slot.name] = mono_ms
-        if slot.interjection:
-            self._interjection_free_at = mono_ms + (scene.duration_ms or 0) + self._gap
+        # Keep the trains breathing: no interjection until the current scene ends
+        # plus a gap. Recomputed on every (re)start — including a takeover cutting a
+        # scene short — so the reservation always reflects what's actually on screen.
+        self._interjection_free_at = mono_ms + (scene.duration_ms or 0) + self._gap
 
     def _to_default(self) -> None:
         self._active = self._default
@@ -104,11 +106,12 @@ class Director:
     # -- per-frame selection ----------------------------------------------
     def _select(self, ctx: Context) -> None:
         mono_ms = ctx.mono_ms
-        running_finite = (self._active is not self._default
-                          and self._active.duration_ms is not None)
-        if running_finite:
-            if mono_ms - self._active_start < self._active.duration_ms:
-                # A finite scene is mid-play: only a higher-priority takeover cuts in.
+        if self._active is not self._default:
+            dur = self._active.duration_ms
+            still_running = dur is None or mono_ms - self._active_start < dur
+            if still_running:
+                # A scene is on screen (finite-and-unfinished, or open-ended): only a
+                # higher-priority takeover may cut in.
                 for slot in self._slots:
                     if (slot.takeover and slot.priority > self._active_priority
                             and self._eligible(slot, ctx)):

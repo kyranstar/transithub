@@ -12,7 +12,6 @@ import json
 import urllib.request
 from collections import Counter
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Callable, Dict, List, Optional
 
 # Try HTTPS first (preferred), then plain HTTP (currently the only one up).
@@ -20,10 +19,6 @@ ASTROS_URLS = (
     "https://api.open-notify.org/astros.json",
     "http://api.open-notify.org/astros.json",
 )
-
-# Last-resort static snapshot, shipped as a fixture. OFF by default: enabled only
-# when a caller explicitly asks, so the default behaviour on failure is None.
-_FALLBACK = Path(__file__).resolve().parents[3] / "tests" / "fixtures" / "astros_sample.json"
 
 
 @dataclass(frozen=True)
@@ -66,17 +61,14 @@ class HumansInSpaceClient:
     """Fetches the humans-in-space count from Open Notify (no API key).
 
     `fetcher` is injectable so tests run fully offline. `urls` defaults to the
-    HTTPS-then-HTTP pair. With `allow_fallback=True`, an unreachable feed falls
-    back to the shipped static snapshot — otherwise a failure returns None.
+    HTTPS-then-HTTP pair, tried in order; any failure (or an unusable body) yields
+    None and the scene just doesn't play — we never present a stale count as live.
     """
 
     def __init__(self, fetcher: Callable[[str], dict] = _default_fetch,
-                 urls=ASTROS_URLS, allow_fallback: bool = False,
-                 fallback_path: Path = _FALLBACK):
+                 urls=ASTROS_URLS):
         self._fetch = fetcher
         self._urls = tuple(urls)
-        self._allow_fallback = allow_fallback
-        self._fallback_path = fallback_path
 
     def fetch(self) -> Optional[HumansInSpace]:
         for url in self._urls:
@@ -86,9 +78,4 @@ class HumansInSpaceClient:
                 snap = None
             if snap is not None:
                 return snap
-        if self._allow_fallback:
-            try:
-                return _parse(json.loads(self._fallback_path.read_text()))
-            except Exception:
-                return None
         return None

@@ -23,9 +23,27 @@ class HealthScene(Scene):
         img = Image.new("RGB", (self.cols, self.rows), _BG)
         if (elapsed_ms // 500) % 2 == 0:          # slow blink draws the eye
             self._warning_triangle(img, self.cols // 2, 2, 9, 8)
-        x = (self.cols - S.text_width(self.message)) // 2
-        S.draw_text(img, x, 21, self.message, _TEXT, outline=_OUT)
+        lines = self._wrap(self.message)
+        ys = (21,) if len(lines) == 1 else (16, 24)   # wrap long messages onto two rows
+        for y, line in zip(ys, lines):
+            x = (self.cols - S.text_width(line)) // 2
+            S.draw_text(img, x, y, line, _TEXT, outline=_OUT)
         return img
+
+    @staticmethod
+    def _wrap(message: str, max_px: int = 60):
+        """One line if it fits, else a greedy two-line split on spaces (so a long
+        warning like 'WEATHER STALE' never runs off the 64px panel)."""
+        if S.text_width(message) <= max_px or " " not in message:
+            return [message]
+        words = message.split()
+        first = words[0]
+        i = 1
+        while i < len(words) and S.text_width(f"{first} {words[i]}") <= max_px:
+            first = f"{first} {words[i]}"
+            i += 1
+        rest = " ".join(words[i:])
+        return [first, rest] if rest else [first]
 
     def _warning_triangle(self, img, cx: int, top: int, half: int, h: int) -> None:
         px = img.load()

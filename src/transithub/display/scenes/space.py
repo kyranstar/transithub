@@ -86,13 +86,22 @@ class HumansInSpaceScene(Scene):
         return img
 
     def _craft_line(self, craft: str) -> str:
-        """'CRAFT n', shortened so the whole line fits 64px (counts always survive)."""
+        """'CRAFT n', shortened to fit 64px. Drop trailing words first (so "Crew
+        Dragon 6" becomes "Crew 6", not "Crew Drago 6"), and only hard-trim a single
+        long word as a last resort. The count always survives."""
         n = self.h.by_craft[craft]
-        line = f"{craft} {n}"
-        while S.text_width(line) > self.cols and len(craft) > 3:
-            craft = craft[:-1]                        # trim the name, keep the count
-            line = f"{craft} {n}"
-        return line
+        if S.text_width(f"{craft} {n}") <= self.cols:
+            return f"{craft} {n}"
+        words = craft.split()
+        while len(words) > 1:
+            words.pop()
+            cand = f"{' '.join(words)} {n}"
+            if S.text_width(cand) <= self.cols:
+                return cand
+        name = words[0] if words else craft
+        while len(name) > 3 and S.text_width(f"{name} {n}") > self.cols:
+            name = name[:-1]
+        return f"{name} {n}"
 
     def _craft_beat(self, frame: int) -> Image.Image:
         img = _space_bg(self.cols, self.rows, frame)

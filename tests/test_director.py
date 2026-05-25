@@ -116,6 +116,38 @@ def test_interjection_gap_blocks_back_to_back():
     assert d.render(NOW, 24_000) == "b"     # gap elapsed -> b fires (a now on cooldown)
 
 
+def test_open_ended_source_scene_holds_until_takeover():
+    # A source scene with duration_ms=None must stay on screen (not drop after one
+    # frame, not restart every frame) until a higher-priority takeover cuts in.
+    held = FakeScene("hold", duration_ms=None)
+    src = FakeSource("hold", lambda c: held)
+    tk = FakeSource("tk", lambda c: FakeScene("tk", 4000) if c.mono_ms >= 5000 else None)
+    d = Director(DEFAULT, [
+        Slot(src, priority=40, cooldown_ms=600_000, interjection=False),
+        Slot(tk, priority=90, takeover=True, interjection=False, cooldown_ms=600_000),
+    ], context_builder=_builder())
+    assert d.render(NOW, 0) == "hold"
+    assert d.render(NOW, 2000) == "hold"     # still held
+    assert d.render(NOW, 6000) == "tk"       # higher-priority takeover preempts
+
+
+def test_takeover_resets_interjection_gap():
+    # When a takeover cuts a long interjection scene short, the next interjection
+    # should be gated by the takeover's end + gap, not the original (stale) scene.
+    wx = FakeSource("wx", lambda c: FakeScene("wx", 60_000))
+    tk = FakeSource("tk", lambda c: FakeScene("tk", 4000) if 1000 <= c.mono_ms < 2000 else None)
+    nxt = FakeSource("nxt", lambda c: FakeScene("nxt", 3000))
+    d = Director(DEFAULT, [
+        Slot(wx, priority=50, cooldown_ms=600_000, interjection=True),
+        Slot(tk, priority=90, takeover=True, interjection=False, cooldown_ms=600_000),
+        Slot(nxt, priority=40, cooldown_ms=0, interjection=True),
+    ], context_builder=_builder(), min_interjection_gap_ms=20_000)
+    assert d.render(NOW, 0) == "wx"          # free_at would be 80000 from wx alone
+    assert d.render(NOW, 1000) == "tk"       # takeover -> free_at recomputed to 25000
+    assert d.render(NOW, 5000) == "trains"   # tk ended; nxt still within the gap
+    assert d.render(NOW, 25_000) == "nxt"    # gap from the takeover elapsed -> nxt fires
+
+
 def test_dimmer_applied_to_output():
     from transithub.display.dimmer import Dimmer
 

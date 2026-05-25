@@ -158,9 +158,14 @@ def _is_active(alert: dict, now: int) -> bool:
     if not periods:
         return True
     for p in periods:
-        start = int(p.get("start") or 0)
-        end = p.get("end")
-        end = int(end) if end is not None else None
+        if not isinstance(p, dict):
+            continue
+        try:
+            start = int(p.get("start") or 0)
+            end = p.get("end")
+            end = int(end) if end is not None else None
+        except (TypeError, ValueError):
+            continue            # a malformed period just doesn't count as active
         if start <= now and (end is None or now <= end):
             return True
     return False
@@ -204,16 +209,19 @@ class AlertsClient:
         # Collect active disruption alerts per line as (tag, header, reason).
         by_line: dict = {}
         for entity in data.get("entity", []):
-            alert = entity.get("alert")
-            if not alert:
-                continue
-            tag = _TAG_BY_TYPE.get(_alert_type(alert))
-            if tag is None or not _is_active(alert, now):
-                continue
-            header = _header_text(alert)
-            reason = parse_reason(header) or parse_reason(_description_text(alert))
-            for route in _routes(alert):
-                by_line.setdefault(route, []).append((tag, header, reason))
+            try:
+                alert = entity.get("alert")
+                if not alert:
+                    continue
+                tag = _TAG_BY_TYPE.get(_alert_type(alert))
+                if tag is None or not _is_active(alert, now):
+                    continue
+                header = _header_text(alert)
+                reason = parse_reason(header) or parse_reason(_description_text(alert))
+                for route in _routes(alert):
+                    by_line.setdefault(route, []).append((tag, header, reason))
+            except Exception:
+                continue   # one malformed alert never drops the rest of the feed
 
         result: List[Optional[LineAlert]] = []
         for train in trains:

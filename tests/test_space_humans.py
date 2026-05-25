@@ -50,13 +50,3 @@ def test_none_on_empty_or_garbage_payload():
     assert HumansInSpaceClient(fetcher=lambda u: {}).fetch() is None
     assert HumansInSpaceClient(fetcher=lambda u: {"people": []}).fetch() is None
     assert HumansInSpaceClient(fetcher=lambda u: {"number": 5}).fetch() is None
-
-
-def test_fallback_used_only_when_explicitly_enabled():
-    def boom(url):
-        raise OSError("down")
-    # default: no fallback -> None
-    assert HumansInSpaceClient(fetcher=boom).fetch() is None
-    # opt-in: serves the shipped static snapshot
-    snap = HumansInSpaceClient(fetcher=boom, allow_fallback=True).fetch()
-    assert snap is not None and snap.total == 12

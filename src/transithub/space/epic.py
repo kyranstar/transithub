@@ -137,6 +137,8 @@ class EpicClient:
         if not isinstance(meta, list) or not meta:
             return None
         item = meta[0]                      # the most recent capture
+        if not isinstance(item, dict):
+            return None
         when = _parse_date(item.get("date", ""))
         try:
             raw = self._image(image_url(item))
