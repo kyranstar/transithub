@@ -29,8 +29,8 @@ from .display.scenes.weather import WeatherScene
 from .display.scenes.sun_event import SunEventScene
 
 HUMANS_POLL_S = 30 * 60
-EARTH_POLL_S = 60 * 60
-HUMANS_STALE_DAYS = 21      # hide the people-in-space count if unconfirmed this long
+EARTH_POLL_S = 3 * 60 * 60   # matches the Earth scene's ~3h cadence (each EPIC PNG is ~3 MB)
+HUMANS_STALE_DAYS = 21       # hide the people-in-space count if unconfirmed this long
 
 
 def _poller(stop_event, store, client, trains, poll_seconds, health=None):

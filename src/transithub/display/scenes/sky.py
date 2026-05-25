@@ -293,17 +293,26 @@ class IssPassSource:
 
 
 class PlaneOverheadSource:
-    """Shows the nearest plane overhead while one is present in ``ctx.sky``."""
+    """Shows a plane passing overhead — once per aircraft.
+
+    Reads ``ctx.sky.plane_overhead``. Remembers the last callsign it flagged so the
+    same plane isn't shown twice while it lingers in range (or flickers at the edge
+    of it); it fires again only for a *different* aircraft."""
     name = "plane"
 
     def __init__(self, cols: int = 64, rows: int = 32):
         self.cols, self.rows = cols, rows
+        self._last_callsign: Optional[str] = None
 
     def poll(self, ctx: Context) -> Optional[Scene]:
         sky = ctx.sky
-        if sky is None or getattr(sky, "plane_overhead", None) is None:
+        plane = getattr(sky, "plane_overhead", None) if sky is not None else None
+        if plane is None:
             return None
-        return PlaneOverheadScene(sky.plane_overhead, self.cols, self.rows)
+        if plane.callsign == self._last_callsign:
+            return None              # already flagged this aircraft; wait for a new one
+        self._last_callsign = plane.callsign
+        return PlaneOverheadScene(plane, self.cols, self.rows)
 
 
 def _as_naive(dt: datetime) -> datetime:

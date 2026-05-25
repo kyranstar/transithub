@@ -225,3 +225,18 @@ def test_plane_source_fires_when_plane_present():
 def test_plane_source_quiet_when_no_plane():
     sky = SkyData(plane_overhead=None)
     assert PlaneOverheadSource().poll(_ctx(datetime(2026, 5, 31, 12, 0), sky=sky)) is None
+
+
+def test_plane_source_does_not_flag_same_plane_twice():
+    now = datetime(2026, 5, 31, 12, 0)
+    src = PlaneOverheadSource()
+    ual = SkyData(plane_overhead=Plane("UAL415", 8175, 218.0, "SW"))
+    dal = SkyData(plane_overhead=Plane("DAL336", 6000, 90.0, "E"))
+
+    assert src.poll(_ctx(now, sky=ual)) is not None      # first sighting -> shown
+    assert src.poll(_ctx(now, sky=ual)) is None          # same plane lingering -> skipped
+    assert src.poll(_ctx(now, sky=ual)) is None          # still the same -> still skipped
+    assert src.poll(_ctx(now, sky=dal)) is not None      # a different aircraft -> shown
+    assert src.poll(_ctx(now, sky=SkyData())) is None    # gap (no plane)
+    # UAL415 returning later (a genuinely new pass) is allowed again, not stuck.
+    assert src.poll(_ctx(now, sky=ual)) is not None

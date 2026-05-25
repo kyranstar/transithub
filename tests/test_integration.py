@@ -73,15 +73,30 @@ def test_calm_day_is_almost_all_trains():
     assert seen["TrainScene"] > seen["WeatherScene"]
 
 
-def test_constant_plane_overhead_does_not_dominate():
-    # Even with a plane always in range (the NYC reality), the long cooldown keeps it
-    # a small slice and the trains stay the backbone — regression for the old config
-    # where a plane preempted the trains roughly every minute.
+def test_lingering_plane_is_flagged_once():
+    # The same plane sitting in range (or flickering at its edge) is flagged once,
+    # not re-shown every cooldown — PlaneOverheadSource de-dupes by callsign.
     holders = _holders(weather=_weather())
     holders["sky"] = Holder(SkyData(
-        plane_overhead=Plane("BAW178", 35000, 45.0, "NE", route="JFK > LHR")))
+        plane_overhead=Plane("BAW178", 6000, 45.0, "NE", route="JFK > LHR")))
     seen = _run(_director(holders))
-    assert seen["TrainScene"] == max(seen.values())          # trains stay the backbone
+    assert seen.get("PlaneOverheadScene", 0) <= 2            # ~one 7s scene, then never again
+    assert seen["TrainScene"] == max(seen.values())
+
+
+def test_busy_plane_stream_does_not_dominate():
+    # A *new* aircraft overhead every minute (a busy approach stream): the cooldown
+    # bounds how often it shows, so the trains stay the backbone even then.
+    holders = _holders(weather=_weather())
+    director = _director(holders)
+    seen = Counter()
+    for mono in range(0, 60 * 60_000, 5000):
+        cs = f"FLT{mono // 60_000}"                          # a different flight each minute
+        holders["sky"].set(SkyData(
+            plane_overhead=Plane(cs, 6000, 90.0, "E", route="JFK > LHR")))
+        director.render(BASE + timedelta(milliseconds=mono), mono)
+        seen[type(director._active).__name__] += 1
+    assert seen["TrainScene"] == max(seen.values())
     assert seen["TrainScene"] > 3 * seen.get("PlaneOverheadScene", 0)
 
 
