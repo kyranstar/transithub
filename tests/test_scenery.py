@@ -73,3 +73,50 @@ def test_moon_new_draws_nothing():
     img = _img()
     S.moon(img, CX, CY, R, 0.0)             # new moon is invisible -> no pixels, no stray glow
     assert img.tobytes() == _img().tobytes()
+
+
+# --- weather hero primitives ---
+
+def _nonblack(img):
+    return sum(img.getpixel((x, y)) != (0, 0, 0) for x in range(64) for y in range(32))
+
+
+def test_fog_draws_pixels_and_drifts():
+    a, b = _img(), _img()
+    S.fog(a, 0)
+    S.fog(b, 12)
+    assert _nonblack(a) > 0
+    assert a.tobytes() != b.tobytes()       # the bank drifts between frames
+
+
+def test_pulsing_sun_lights_center_and_breathes():
+    a, b = _img(), _img()
+    S.pulsing_sun(a, 32, 16, 6, 0)
+    S.pulsing_sun(b, 32, 16, 6, 18)         # roughly anti-phase
+    assert a.getpixel((32, 16)) != (0, 0, 0)
+    assert a.tobytes() != b.tobytes()       # the glow pulses over time
+
+
+def test_gusts_draw_streaks_that_move():
+    a, b = _img(), _img()
+    S.gusts(a, 0)
+    S.gusts(b, 7)
+    assert _nonblack(a) > 0
+    assert a.tobytes() != b.tobytes()       # streaks travel across the panel
+
+
+def test_gusts_stay_in_bounds():
+    img = _img()
+    for f in range(0, 40):
+        S.gusts(img, f)                     # must never index outside the panel
+    assert img.size == (64, 32)
+
+
+def test_haze_tints_without_clearing():
+    img = _img()
+    S.gradient(img, [(0.0, (20, 20, 20)), (1.0, (60, 60, 60))])
+    before = img.getpixel((10, 10))
+    S.haze(img, 0, (200, 120, 60), 0.4)
+    after = img.getpixel((10, 10))
+    assert after != before                  # the wash shifts existing pixels toward the tint
+    assert after != (0, 0, 0)               # it never blacks out the scene

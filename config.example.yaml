@@ -32,12 +32,41 @@ weather:
   enabled: true
   units: fahrenheit          # or celsius
   poll_seconds: 600
-  rundown_every_minutes: 15  # how often the weather rundown interrupts the trains
-  rundown_seconds: 60        # how long it runs
+  rundown_every_minutes: 7   # how often the weather rundown interrupts the trains
+  rundown_rounds: 2          # full passes of the rundown's slides each time
 
 notifications:
   sunrise: true              # animated notice 30 min before -> 30 min after sunrise
   sunset: true               # animated notice 45 min before -> 10 min after sunset
+
+# Dim the panel in the evening so it isn't a floodlight at night: brightness ramps
+# from full at sunset down to evening_brightness at bedtime, then holds
+# night_brightness overnight (fractions of the matrix brightness above).
+night:
+  bedtime: "21:30"
+  evening_brightness: 0.5
+  night_brightness: 0.16
+
+# Ambient extras, all from free keyless feeds. Each is event-driven or occasional
+# and yields to the trains — see docs/scene-framework.md.
+sky:
+  enabled: true              # master switch for the sky scenes (toggle each below)
+  iss: true                  # ISS pass: a "LOOK NW" heads-up, then an overhead arc
+  planes: true               # a plane passing directly overhead (ABOVE YOU / JFK > LHR)
+  moon: true                 # a brief salute on full- and new-moon nights
+  plane_radius_nm: 3         # how close (nautical miles) a plane must be to count as overhead
+  plane_max_alt_ft: 12000    # only planes below this count — i.e. low enough to actually hear
+space:
+  enabled: true              # master switch for the space interjections (toggle each below)
+  humans: true               # an occasional "N humans in space" fact
+  earth: true                # an occasional real NASA EPIC photo of Earth
+local:
+  enabled: true              # show a nearby farmers market that's open today
+  markets:                   # your local market(s) — edit/add your own
+    - name: "MARIA HERNANDEZ"
+      day: "saturday"        # the weekday it runs
+      season: ["2026-05-23", "2026-11-22"]   # inclusive [start, end]; omit for year-round
+      until: "3"             # closing hour -> shows "UNTIL 3"
 
 trash:
   days: ["monday"]           # TRASH TMRW shows 3pm–midnight the day before each

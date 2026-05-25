@@ -20,11 +20,13 @@ def test_store_defaults_to_empty_lists():
     assert store.snapshot() == [[], [], []]
 
 
-def test_store_alerts_roundtrip():
+def test_store_line_alerts_roundtrip():
+    from transithub.mta.alerts import LineAlert
     store = ArrivalStore(n_trains=2)
-    assert store.alerts() == [None, None]
-    store.set_alerts([None, "SUSP"])
-    assert store.alerts() == [None, "SUSP"]
+    assert store.line_alerts() == [None, None]
+    store.set_line_alerts([None, LineAlert("M", "SUSP", "SIGNALS")])
+    out = store.line_alerts()
+    assert out[0] is None and out[1].tag == "SUSP" and out[1].reason == "SIGNALS"
 
 
 def test_weather_holder_roundtrip():

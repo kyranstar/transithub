@@ -1,68 +1,141 @@
-from datetime import datetime, timedelta
-from typing import Callable
+"""The scheduler: picks the one scene on screen each frame.
+
+Trains are the default and fill all unclaimed time. Everything else is a
+`SceneSource` bound to a `Slot` (priority, cooldown, day parts, takeover). Each
+frame the Director lets a running finite scene finish — unless a higher-priority
+takeover is ready — then, when the screen is free, starts the highest-priority
+source that wants it. See docs/scene-framework.md for the full design."""
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from datetime import datetime
+from typing import Any, Callable, Optional, Protocol, Sequence
+
+from PIL import Image
+
+from ..profile import Profile
+from .scenes.base import Scene
+
+
+@dataclass
+class Context:
+    """A snapshot of the world handed to every source on each poll."""
+    now: datetime
+    mono_ms: int
+    profile: Profile
+    weather: Any = None
+    sky: Any = None          # ISS pass + plane overhead snapshot
+    space: Any = None        # humans-in-space + Earth-from-space
+    health: tuple = ()       # active warning strings; empty == all well
+
+
+class SceneSource(Protocol):
+    """Something that may want the screen. `poll` returns a fresh, finite Scene to
+    play now, or None. Sources never decide timing relative to each other — the
+    Director owns that via the slot."""
+    name: str
+
+    def poll(self, ctx: Context) -> Optional[Scene]: ...
+
+
+@dataclass
+class Slot:
+    """A source plus its scheduling policy."""
+    source: Any
+    priority: int = 0
+    cooldown_ms: int = 0
+    profiles: frozenset = field(default_factory=lambda: frozenset(Profile))
+    takeover: bool = False        # may cut into a lower-priority running scene
+    interjection: bool = True     # subject to the global anti-back-to-back gap
+    first_after_ms: int = 0       # earliest it may first play (lets trains show first)
+
+    @property
+    def name(self) -> str:
+        return self.source.name
 
 
 class Director:
-    """Chooses the active scene each frame: trains by default, preempted by the
-    weather rundown (on a cadence) and sunrise/sunset notifications (once per day)."""
+    def __init__(self, default_scene: Scene, slots: Sequence[Slot] = (),
+                 context_builder: Optional[Callable[[datetime, int], Context]] = None,
+                 dimmer=None, min_interjection_gap_ms: int = 20_000):
+        self._default = default_scene
+        self._slots = sorted(slots, key=lambda s: s.priority, reverse=True)
+        self._ctx_builder = context_builder
+        self._dimmer = dimmer
+        self._gap = min_interjection_gap_ms
 
-    def __init__(self, train_scene, weather_provider: Callable[[], object],
-                 make_weather_scene: Callable, make_sun_scene: Callable,
-                 rundown_every_minutes: int = 15, weather_enabled: bool = True,
-                 sunrise_enabled: bool = True, sunset_enabled: bool = True):
-        self._train = train_scene
-        self._weather_provider = weather_provider
-        self._make_weather = make_weather_scene
-        self._make_sun = make_sun_scene
-        self._interval_ms = rundown_every_minutes * 60_000
-        self._weather_enabled = weather_enabled
-        self._sunrise_enabled = sunrise_enabled
-        self._sunset_enabled = sunset_enabled
-
-        self._active = train_scene
+        self._active: Scene = default_scene
         self._active_start = 0
-        self._last_rundown = -self._interval_ms + 30_000   # first rundown ~30s after boot
-        self._fired = set()                                # {(event, date)}
+        self._active_priority = -1
+        # Init so a slot becomes eligible at mono_ms == first_after_ms.
+        self._last_play = {s.name: s.first_after_ms - s.cooldown_ms for s in self._slots}
+        self._interjection_free_at = 0
 
-    def _start(self, scene, mono_ms):
+    # -- context -----------------------------------------------------------
+    def _context(self, now: datetime, mono_ms: int) -> Context:
+        if self._ctx_builder is not None:
+            return self._ctx_builder(now, mono_ms)
+        return Context(now=now, mono_ms=mono_ms, profile=Profile.DAY)
+
+    # -- eligibility / start ----------------------------------------------
+    def _eligible(self, slot: Slot, ctx: Context) -> bool:
+        if ctx.profile not in slot.profiles:
+            return False
+        if ctx.mono_ms - self._last_play[slot.name] < slot.cooldown_ms:
+            return False
+        if slot.interjection and ctx.mono_ms < self._interjection_free_at:
+            return False
+        return True
+
+    def _start(self, slot: Slot, scene: Scene, mono_ms: int) -> None:
         self._active = scene
         self._active_start = mono_ms
+        self._active_priority = slot.priority
+        self._last_play[slot.name] = mono_ms
+        # Keep the trains breathing: no interjection until the current scene ends
+        # plus a gap. Recomputed on every (re)start — including a takeover cutting a
+        # scene short — so the reservation always reflects what's actually on screen.
+        self._interjection_free_at = mono_ms + (scene.duration_ms or 0) + self._gap
 
-    def _due_sun(self, now: datetime, weather):
-        if weather is None:
-            return None
-        for enabled, kind, event in ((self._sunrise_enabled, "sunrise", weather.sunrise),
-                                     (self._sunset_enabled, "sunset", weather.sunset)):
-            if not enabled:
+    def _to_default(self) -> None:
+        self._active = self._default
+        self._active_start = 0          # trains run continuously since boot
+        self._active_priority = -1
+
+    # -- per-frame selection ----------------------------------------------
+    def _select(self, ctx: Context) -> None:
+        mono_ms = ctx.mono_ms
+        if self._active is not self._default:
+            dur = self._active.duration_ms
+            still_running = dur is None or mono_ms - self._active_start < dur
+            if still_running:
+                # A scene is on screen (finite-and-unfinished, or open-ended): only a
+                # higher-priority takeover may cut in.
+                for slot in self._slots:
+                    if (slot.takeover and slot.priority > self._active_priority
+                            and self._eligible(slot, ctx)):
+                        scene = slot.source.poll(ctx)
+                        if scene is not None:
+                            self._start(slot, scene, mono_ms)
+                            return
+                return
+            self._to_default()
+
+        # Screen is free: start the highest-priority source that wants it.
+        for slot in self._slots:
+            if not self._eligible(slot, ctx):
                 continue
-            open_t = event - timedelta(minutes=30 if kind == "sunrise" else 45)
-            close_t = event + timedelta(minutes=30 if kind == "sunrise" else 10)
-            key = (kind, now.date())
-            if open_t <= now <= close_t and key not in self._fired:
-                self._fired.add(key)
-                return self._make_sun(kind, event)
-        return None
+            scene = slot.source.poll(ctx)
+            if scene is not None:
+                self._start(slot, scene, mono_ms)
+                return
+        if self._active is not self._default:
+            self._to_default()
 
-    def render(self, now: datetime, mono_ms: int):
-        # 1) finish an in-progress finite scene
-        if self._active.duration_ms is not None:
-            if mono_ms - self._active_start >= self._active.duration_ms:
-                self._start(self._train, mono_ms)
-            else:
-                return self._active.render(mono_ms - self._active_start)
-
-        # 2) only trigger new scenes from the default (train) state
-        if self._active is self._train:
-            weather = self._weather_provider()
-            sun = self._due_sun(now, weather)
-            if sun is not None:
-                self._start(sun, mono_ms)
-                return sun.render(0)
-            if (self._weather_enabled and weather is not None
-                    and mono_ms - self._last_rundown >= self._interval_ms):
-                self._last_rundown = mono_ms
-                ws = self._make_weather(weather, now)
-                self._start(ws, mono_ms)
-                return ws.render(0)
-
-        return self._active.render(mono_ms - self._active_start)
+    def render(self, now: datetime, mono_ms: int) -> Image.Image:
+        ctx = self._context(now, mono_ms)
+        self._select(ctx)
+        img = self._active.render(mono_ms - self._active_start)
+        if self._dimmer is not None:
+            img = self._dimmer.apply(img, ctx)
+        return img

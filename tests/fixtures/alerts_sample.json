@@ -1,0 +1,357 @@
+{
+  "entity": [
+    {
+      "id": "lmm:alert:539140",
+      "alert": {
+        "informed_entity": [
+          {
+            "route_id": "3"
+          }
+        ],
+        "active_period": [
+          {
+            "start": 1699999400,
+            "end": 1700003600
+          }
+        ],
+        "header_text": {
+          "translation": [
+            {
+              "language": "en",
+              "text": "Downtown [1][2] trains are running on the express track from 72 St to Chambers St due to an NYPD investigation at 34 St-Penn Station."
+            }
+          ]
+        },
+        "description_text": {
+          "translation": [
+            {
+              "language": "en",
+              "text": "For service to/from bypassed stations, take an uptown train.\n[1] trains are running with delays in both directions.\nExpect a longer wait for a downtown [3] train while they share the track with rerouted trains."
+            }
+          ]
+        },
+        "transit_realtime.mercury_alert": {
+          "alert_type": "Delays"
+        }
+      }
+    },
+    {
+      "id": "lmm:alert:539141",
+      "alert": {
+        "informed_entity": [
+          {
+            "route_id": "3"
+          }
+        ],
+        "active_period": [
+          {
+            "start": 1699999400,
+            "end": 1700003600
+          }
+        ],
+        "header_text": {
+          "translation": [
+            {
+              "language": "en",
+              "text": "[3] trains are running with delays in both directions while we address a mechanical problem on a train at Harlem-148 St."
+            }
+          ]
+        },
+        "transit_realtime.mercury_alert": {
+          "alert_type": "Delays"
+        }
+      }
+    },
+    {
+      "id": "lmm:planned_work:31952",
+      "alert": {
+        "informed_entity": [
+          {
+            "route_id": "4"
+          }
+        ],
+        "active_period": [
+          {
+            "start": 1699999400,
+            "end": 1700003600
+          }
+        ],
+        "header_text": {
+          "translation": [
+            {
+              "language": "en",
+              "text": "In the Bronx, [4] runs every 16 minutes between 167 St and Woodlawn\nThe last stop for alternate trains from Manhattan is 167 St"
+            }
+          ]
+        },
+        "description_text": {
+          "translation": [
+            {
+              "language": "en",
+              "text": "Transfer at 167 St to a Woodlawn-bound [4] to continue your trip.\nWhat's happening?\nSignal maintenance\n\n[accessibility icon] This service change affects one or more ADA accessible stations and these travel alternatives may not be fully accessible. Please contact 511 to plan your trip."
+            }
+          ]
+        },
+        "transit_realtime.mercury_alert": {
+          "alert_type": "Reduced Service"
+        }
+      }
+    },
+    {
+      "id": "lmm:planned_work:31947",
+      "alert": {
+        "informed_entity": [
+          {
+            "route_id": "2"
+          }
+        ],
+        "active_period": [
+          {
+            "start": 1699999400,
+            "end": 1700003600
+          }
+        ],
+        "header_text": {
+          "translation": [
+            {
+              "language": "en",
+              "text": "[2] runs every 30 minutes\nIn Upper Manhattan, all trains at 110 St-Malcolm X Plaza, 116 St, 125 St and 135 St board from the downtown platform"
+            }
+          ]
+        },
+        "description_text": {
+          "translation": [
+            {
+              "language": "en",
+              "text": "Note: No [3] trains running during this time.\n\nWhat's happening?\nTrack maintenance"
+            }
+          ]
+        },
+        "transit_realtime.mercury_alert": {
+          "alert_type": "Reduced Service"
+        }
+      }
+    },
+    {
+      "id": "lmm:planned_work:31885",
+      "alert": {
+        "informed_entity": [
+          {
+            "route_id": "1"
+          }
+        ],
+        "active_period": [
+          {
+            "start": 1699999400,
+            "end": 1700003600
+          }
+        ],
+        "header_text": {
+          "translation": [
+            {
+              "language": "en",
+              "text": "[1] runs every 8 minutes"
+            }
+          ]
+        },
+        "description_text": {
+          "translation": [
+            {
+              "language": "en",
+              "text": "What's happening?\nWe're making station improvements"
+            }
+          ]
+        },
+        "transit_realtime.mercury_alert": {
+          "alert_type": "Reduced Service"
+        }
+      }
+    },
+    {
+      "id": "lmm:planned_work:31441",
+      "alert": {
+        "informed_entity": [
+          {
+            "route_id": "6"
+          }
+        ],
+        "active_period": [
+          {
+            "start": 1699999400,
+            "end": 1700003600
+          }
+        ],
+        "header_text": {
+          "translation": [
+            {
+              "language": "en",
+              "text": "[6] runs every 8 minutes in Manhattan"
+            }
+          ]
+        },
+        "description_text": {
+          "translation": [
+            {
+              "language": "en",
+              "text": "[6] runs on a modified schedule while [4] and [6] trains share the local track in Manhattan.\n\nWhat's happening?\nWe're replacing tracks"
+            }
+          ]
+        },
+        "transit_realtime.mercury_alert": {
+          "alert_type": "Reduced Service"
+        }
+      }
+    },
+    {
+      "id": "lmm:planned_work:20535",
+      "alert": {
+        "informed_entity": [
+          {
+            "route_id": "C"
+          }
+        ],
+        "active_period": [
+          {
+            "start": 1699999400,
+            "end": 1700003600
+          }
+        ],
+        "header_text": {
+          "translation": [
+            {
+              "language": "en",
+              "text": "Take the [A] instead"
+            }
+          ]
+        },
+        "description_text": {
+          "translation": [
+            {
+              "language": "en",
+              "text": "[C] service operates daily during days and evenings."
+            }
+          ]
+        },
+        "transit_realtime.mercury_alert": {
+          "alert_type": "No Scheduled Service"
+        }
+      }
+    },
+    {
+      "id": "lmm:planned_work:32074",
+      "alert": {
+        "informed_entity": [
+          {
+            "route_id": "R"
+          }
+        ],
+        "active_period": [
+          {
+            "start": 1699999400,
+            "end": 1700003600
+          }
+        ],
+        "header_text": {
+          "translation": [
+            {
+              "language": "en",
+              "text": "In Brooklyn, Manhattan-bound [R] skips 25 St, Prospect Av, 4 Av-9 St and Union St"
+            }
+          ]
+        },
+        "description_text": {
+          "translation": [
+            {
+              "language": "en",
+              "text": "For service to 25 St, Prospect Av, 4 Av-9 St and Union St, take the [R] to Atlantic Av-Barclays Ctr and transfer to a local Coney Island-bound [D] or [N] or Bay Ridge-bound [R]\n\nFor service from these stations, take the [D][N] or [R] to 36 St and transfer to a Manhattan-bound [R].\n\nWhat's happening?\nWe're replacing tracks"
+            }
+          ]
+        },
+        "transit_realtime.mercury_alert": {
+          "alert_type": "Planned - Stops Skipped"
+        }
+      }
+    },
+    {
+      "id": "lmm:alert:900001",
+      "alert": {
+        "informed_entity": [
+          {
+            "route_id": "L"
+          }
+        ],
+        "active_period": [
+          {
+            "start": 1699999400,
+            "end": 1700003600
+          }
+        ],
+        "header_text": {
+          "translation": [
+            {
+              "language": "en",
+              "text": "Southbound [L] trains are running with delays because of a sick passenger at Bedford Av."
+            }
+          ]
+        },
+        "transit_realtime.mercury_alert": {
+          "alert_type": "Delays"
+        }
+      }
+    },
+    {
+      "id": "lmm:alert:900002",
+      "alert": {
+        "informed_entity": [
+          {
+            "route_id": "M"
+          }
+        ],
+        "active_period": [
+          {
+            "start": 1699999400,
+            "end": 1700003600
+          }
+        ],
+        "header_text": {
+          "translation": [
+            {
+              "language": "en",
+              "text": "[M] trains are delayed while we address signal problems at Myrtle Av."
+            }
+          ]
+        },
+        "transit_realtime.mercury_alert": {
+          "alert_type": "Delays"
+        }
+      }
+    },
+    {
+      "id": "lmm:alert:900003",
+      "alert": {
+        "informed_entity": [
+          {
+            "route_id": "L"
+          }
+        ],
+        "active_period": [
+          {
+            "start": 1699999400,
+            "end": 1700003600
+          }
+        ],
+        "header_text": {
+          "translation": [
+            {
+              "language": "en",
+              "text": "Manhattan-bound [L] trains are delayed because of an FDNY investigation at 1 Av."
+            }
+          ]
+        },
+        "transit_realtime.mercury_alert": {
+          "alert_type": "Delays"
+        }
+      }
+    }
+  ]
+}

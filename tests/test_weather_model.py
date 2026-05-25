@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 
 from transithub.weather.model import (
     Condition, condition_for_code, SunPhase, sun_phase, Weather, flags, Flag,
-    PrecipWindow, precip_window, moon_phase,
+    PrecipWindow, precip_window, moon_phase, summary,
 )
 
 
@@ -22,11 +22,27 @@ def _w(**kw):
 def test_condition_mapping():
     assert condition_for_code(0) is Condition.CLEAR
     assert condition_for_code(3) is Condition.CLOUDY
-    assert condition_for_code(48) is Condition.CLOUDY
     assert condition_for_code(61) is Condition.RAIN
     assert condition_for_code(95) is Condition.RAIN
     assert condition_for_code(73) is Condition.SNOW
     assert condition_for_code(86) is Condition.SNOW
+
+
+def test_condition_fog_codes():
+    assert condition_for_code(45) is Condition.FOG
+    assert condition_for_code(48) is Condition.FOG
+
+
+def test_weather_humidity_and_wind_default_to_zero():
+    w = _w()                              # _w omits humidity/wind -> defaults
+    assert w.humidity == 0
+    assert w.wind_mph == 0.0
+
+
+def test_weather_carries_humidity_and_wind():
+    w = _w(humidity=88, wind_mph=24.5)
+    assert w.humidity == 88
+    assert w.wind_mph == 24.5
 
 
 def test_sun_phase_windows():
@@ -48,9 +64,13 @@ def test_flag_uv_levels():
 
 
 def test_flag_aqi_levels():
-    assert Flag("AIR QUALITY", "UNHEALTHY (SENS)") in flags(_w(aqi=120), datetime(2026, 5, 23, 9, 0), [])
-    assert Flag("AIR QUALITY", "HAZARDOUS") in flags(_w(aqi=350), datetime(2026, 5, 23, 9, 0), [])
-    assert all(f.headline != "AIR QUALITY" for f in flags(_w(aqi=80), datetime(2026, 5, 23, 9, 0), []))
+    # Unhealthy air surfaces a single glanceable "close your windows" advisory whose
+    # detail carries the severity; clean air says nothing.
+    assert Flag("WINDOWS", "UNHEALTHY") in flags(_w(aqi=160), datetime(2026, 5, 23, 9, 0), [])
+    assert Flag("WINDOWS", "HAZARDOUS") in flags(_w(aqi=350), datetime(2026, 5, 23, 9, 0), [])
+    assert all(f.headline in ("WINDOWS",) or f.headline != "AIR QUALITY"
+               for f in flags(_w(aqi=160), datetime(2026, 5, 23, 9, 0), []))
+    assert all(f.headline != "WINDOWS" for f in flags(_w(aqi=80), datetime(2026, 5, 23, 9, 0), []))
 
 
 def test_flag_precip_rain_vs_snow():
@@ -64,6 +84,73 @@ def test_flag_trash_tomorrow():
     out = flags(_w(), datetime(2026, 5, 23, 18, 0), trash_days=["sunday"])
     assert Flag("TRASH TMRW", "") in out
     assert Flag("TRASH TMRW", "") not in flags(_w(), datetime(2026, 5, 23, 9, 0), ["sunday"])
+
+
+# --- window-closed advisory (folded into flags) ---
+
+DAYTIME = datetime(2026, 5, 23, 13, 0)
+
+
+def test_flag_windows_when_humid_but_otherwise_pleasant():
+    out = flags(_w(temp=72, feels_like=72, humidity=85, aqi=30, uv_index=2), DAYTIME, [])
+    assert Flag("WINDOWS", "HUMID") in out
+
+
+def test_flag_windows_when_aqi_unhealthy():
+    out = flags(_w(temp=72, feels_like=72, aqi=130, uv_index=2), DAYTIME, [])
+    # one combined advisory, not a bare "AIR QUALITY" plus a separate "WINDOWS"
+    assert Flag("WINDOWS", "BAD AIR") in out
+    assert all(f.headline != "AIR QUALITY" for f in out)
+
+
+def test_no_windows_flag_when_air_clean_and_dry():
+    out = flags(_w(temp=72, feels_like=72, humidity=45, aqi=30, uv_index=2), DAYTIME, [])
+    assert all(f.headline != "WINDOWS" for f in out)
+
+
+# --- verbal summary ---
+
+def test_summary_go_outside_on_a_perfect_day():
+    w = _w(temp=68, feels_like=68, condition=Condition.CLEAR, precip_prob=5,
+           aqi=25, uv_index=4, wind_mph=6)
+    assert summary(w, DAYTIME) == "GO OUTSIDE"
+
+
+def test_summary_stay_in_when_freezing():
+    w = _w(temp=18, feels_like=10, today_high=24, today_low=12)
+    assert summary(w, DAYTIME) == "STAY IN"
+
+
+def test_summary_stay_in_when_scorching():
+    w = _w(temp=96, feels_like=101, today_high=98, today_low=80)
+    assert summary(w, DAYTIME) == "STAY IN"
+
+
+def test_summary_stay_in_when_raining():
+    w = _w(temp=66, feels_like=66, condition=Condition.RAIN, precip=_pw(ongoing=True))
+    assert summary(w, DAYTIME) == "STAY IN"
+
+
+def test_summary_stay_in_when_air_is_bad():
+    w = _w(temp=70, feels_like=70, aqi=160)
+    assert summary(w, DAYTIME) == "STAY IN"
+
+
+def test_summary_stay_in_when_very_windy():
+    w = _w(temp=66, feels_like=66, wind_mph=30)
+    assert summary(w, DAYTIME) == "STAY IN"
+
+
+def test_summary_none_when_merely_okay():
+    # 50F, dry, fine air, light breeze -> not great, not bad -> no verdict
+    w = _w(temp=50, feels_like=48, precip_prob=15, aqi=40, uv_index=3, wind_mph=10)
+    assert summary(w, DAYTIME) is None
+
+
+def test_summary_fits_the_panel():
+    from transithub.display import scenery as S
+    for verdict in ("GO OUTSIDE", "STAY IN"):
+        assert S.text_width(verdict, 1) <= 64
 
 
 # --- moon phase (verified against moongiant.com / timeanddate.com) ---

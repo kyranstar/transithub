@@ -1,54 +1,163 @@
 from datetime import datetime
 
-from transithub.display.director import Director
+from PIL import Image
+
+from transithub.display.director import Context, Director, Slot
+from transithub.profile import Profile
+
+NOW = datetime(2026, 5, 25, 12, 0)
 
 
 class FakeScene:
-    def __init__(self, name, duration_ms=None):
+    def __init__(self, name, duration_ms=5000):
         self.name = name
         self.duration_ms = duration_ms
-        self.last = None
 
     def render(self, elapsed_ms):
-        self.last = elapsed_ms
         return self.name
 
 
-SR = datetime(2026, 5, 23, 6, 0)
-SS = datetime(2026, 5, 23, 20, 0)
+class FakeSource:
+    def __init__(self, name, factory):
+        self.name = name
+        self._f = factory
+
+    def poll(self, ctx):
+        return self._f(ctx)
 
 
-class W:  # minimal weather stand-in
-    sunrise, sunset = SR, SS
+DEFAULT = FakeScene("trains", duration_ms=None)
 
 
-def _director(weather=lambda: W()):
-    trains = FakeScene("trains")
-    d = Director(
-        train_scene=trains,
-        weather_provider=weather,
-        make_weather_scene=lambda w, now: FakeScene("weather", 60_000),
-        make_sun_scene=lambda kind, t: FakeScene(f"sun:{kind}", 10_000),
-        rundown_every_minutes=15, sunrise_enabled=True, sunset_enabled=True,
-    )
-    return d, trains
+def _builder(profile=Profile.DAY, health=()):
+    def build(now, mono):
+        return Context(now=now, mono_ms=mono, profile=profile, health=health)
+    return build
 
 
-def test_trains_by_default():
-    d, _ = _director()
-    assert d.render(datetime(2026, 5, 23, 12, 0), 1000) == "trains"
+def test_default_when_no_sources():
+    d = Director(DEFAULT, [], context_builder=_builder())
+    assert d.render(NOW, 1000) == "trains"
 
 
-def test_rundown_fires_on_cadence_then_returns():
-    d, _ = _director()
-    d.render(datetime(2026, 5, 23, 12, 0), 0)
-    assert d.render(datetime(2026, 5, 23, 12, 16), 16 * 60_000) == "weather"
-    assert d.render(datetime(2026, 5, 23, 12, 16, 30), 16 * 60_000 + 30_000) == "weather"
-    assert d.render(datetime(2026, 5, 23, 12, 17, 5), 16 * 60_000 + 61_000) == "trains"
+def test_source_fires_when_eligible():
+    src = FakeSource("wx", lambda c: FakeScene("wx", 5000))
+    d = Director(DEFAULT, [Slot(src, priority=50)], context_builder=_builder())
+    assert d.render(NOW, 0) == "wx"
 
 
-def test_sun_notification_fires_once_per_day():
-    d, _ = _director()
-    assert d.render(datetime(2026, 5, 23, 5, 35), 1000) == "sun:sunrise"
-    assert d.render(datetime(2026, 5, 23, 5, 45), 12_000) == "trains"
-    assert d.render(datetime(2026, 5, 23, 5, 50), 13_000) == "trains"
+def test_cooldown_blocks_refire_until_elapsed():
+    src = FakeSource("wx", lambda c: FakeScene("wx", 5000))
+    d = Director(DEFAULT, [Slot(src, priority=50, cooldown_ms=60_000)],
+                 context_builder=_builder())
+    assert d.render(NOW, 0) == "wx"          # fires (lasts 5s)
+    assert d.render(NOW, 6000) == "trains"   # ended; cooldown not elapsed
+    assert d.render(NOW, 61_000) == "wx"     # cooldown elapsed -> fires again
+
+
+def test_finite_scene_runs_then_returns_to_default():
+    src = FakeSource("wx", lambda c: FakeScene("wx", 5000))
+    d = Director(DEFAULT, [Slot(src, priority=50, cooldown_ms=600_000)],
+                 context_builder=_builder())
+    assert d.render(NOW, 0) == "wx"
+    assert d.render(NOW, 3000) == "wx"
+    assert d.render(NOW, 5000) == "trains"   # exactly at duration -> ended
+
+
+def test_priority_orders_idle_selection():
+    lo = FakeSource("lo", lambda c: FakeScene("lo", 5000))
+    hi = FakeSource("hi", lambda c: FakeScene("hi", 5000))
+    d = Director(DEFAULT, [Slot(lo, priority=10), Slot(hi, priority=90)],
+                 context_builder=_builder())
+    assert d.render(NOW, 0) == "hi"
+
+
+def test_takeover_preempts_running_lower_priority():
+    wx = FakeSource("wx", lambda c: FakeScene("wx", 60_000))
+    ev = FakeSource("ev", lambda c: FakeScene("ev", 5000) if c.mono_ms >= 1000 else None)
+    d = Director(DEFAULT, [
+        Slot(wx, priority=50, cooldown_ms=600_000),
+        Slot(ev, priority=90, takeover=True, interjection=False, cooldown_ms=600_000),
+    ], context_builder=_builder())
+    assert d.render(NOW, 0) == "wx"       # ev not ready -> weather starts (60s)
+    assert d.render(NOW, 2000) == "ev"    # ev now ready and higher priority -> takes over
+
+
+def test_non_takeover_waits_for_running_scene():
+    wx = FakeSource("wx", lambda c: FakeScene("wx", 60_000))
+    ev = FakeSource("ev", lambda c: FakeScene("ev", 5000) if c.mono_ms >= 1000 else None)
+    d = Director(DEFAULT, [
+        Slot(wx, priority=50, cooldown_ms=600_000, interjection=False),
+        Slot(ev, priority=90, takeover=False, cooldown_ms=600_000, interjection=False),
+    ], context_builder=_builder())
+    assert d.render(NOW, 0) == "wx"        # weather starts
+    assert d.render(NOW, 2000) == "wx"     # ev ready & higher prio but no takeover -> waits
+    assert d.render(NOW, 61_000) == "ev"   # weather ended -> ev fires
+
+
+def test_profile_gates_source():
+    src = FakeSource("mk", lambda c: FakeScene("mk", 5000))
+    slot = Slot(src, priority=40, profiles=frozenset({Profile.DAY}))
+    night = Director(DEFAULT, [slot], context_builder=_builder(profile=Profile.NIGHT))
+    assert night.render(NOW, 0) == "trains"
+    day = Director(DEFAULT, [slot], context_builder=_builder(profile=Profile.DAY))
+    assert day.render(NOW, 0) == "mk"
+
+
+def test_interjection_gap_blocks_back_to_back():
+    a = FakeSource("a", lambda c: FakeScene("a", 4000))
+    b = FakeSource("b", lambda c: FakeScene("b", 4000))
+    d = Director(DEFAULT, [
+        Slot(a, priority=30, cooldown_ms=600_000, interjection=True),
+        Slot(b, priority=20, cooldown_ms=0, interjection=True),
+    ], context_builder=_builder(), min_interjection_gap_ms=20_000)
+    assert d.render(NOW, 0) == "a"          # a fires; free_at = 0+4000+20000 = 24000
+    assert d.render(NOW, 4000) == "trains"  # a ended; b blocked by interjection gap
+    assert d.render(NOW, 24_000) == "b"     # gap elapsed -> b fires (a now on cooldown)
+
+
+def test_open_ended_source_scene_holds_until_takeover():
+    # A source scene with duration_ms=None must stay on screen (not drop after one
+    # frame, not restart every frame) until a higher-priority takeover cuts in.
+    held = FakeScene("hold", duration_ms=None)
+    src = FakeSource("hold", lambda c: held)
+    tk = FakeSource("tk", lambda c: FakeScene("tk", 4000) if c.mono_ms >= 5000 else None)
+    d = Director(DEFAULT, [
+        Slot(src, priority=40, cooldown_ms=600_000, interjection=False),
+        Slot(tk, priority=90, takeover=True, interjection=False, cooldown_ms=600_000),
+    ], context_builder=_builder())
+    assert d.render(NOW, 0) == "hold"
+    assert d.render(NOW, 2000) == "hold"     # still held
+    assert d.render(NOW, 6000) == "tk"       # higher-priority takeover preempts
+
+
+def test_takeover_resets_interjection_gap():
+    # When a takeover cuts a long interjection scene short, the next interjection
+    # should be gated by the takeover's end + gap, not the original (stale) scene.
+    wx = FakeSource("wx", lambda c: FakeScene("wx", 60_000))
+    tk = FakeSource("tk", lambda c: FakeScene("tk", 4000) if 1000 <= c.mono_ms < 2000 else None)
+    nxt = FakeSource("nxt", lambda c: FakeScene("nxt", 3000))
+    d = Director(DEFAULT, [
+        Slot(wx, priority=50, cooldown_ms=600_000, interjection=True),
+        Slot(tk, priority=90, takeover=True, interjection=False, cooldown_ms=600_000),
+        Slot(nxt, priority=40, cooldown_ms=0, interjection=True),
+    ], context_builder=_builder(), min_interjection_gap_ms=20_000)
+    assert d.render(NOW, 0) == "wx"          # free_at would be 80000 from wx alone
+    assert d.render(NOW, 1000) == "tk"       # takeover -> free_at recomputed to 25000
+    assert d.render(NOW, 5000) == "trains"   # tk ended; nxt still within the gap
+    assert d.render(NOW, 25_000) == "nxt"    # gap from the takeover elapsed -> nxt fires
+
+
+def test_dimmer_applied_to_output():
+    from transithub.display.dimmer import Dimmer
+
+    class ImgScene:
+        duration_ms = None
+
+        def render(self, e):
+            return Image.new("RGB", (2, 2), (200, 200, 200))
+
+    night = datetime(2026, 5, 25, 23, 0)   # no weather -> fallback NIGHT
+    d = Director(ImgScene(), [], context_builder=_builder(profile=Profile.NIGHT),
+                 dimmer=Dimmer(night_floor=0.5))
+    assert d.render(night, 0).getpixel((0, 0)) == (100, 100, 100)

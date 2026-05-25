@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import math
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -8,6 +10,7 @@ from typing import List, Optional
 class Condition(str, Enum):
     CLEAR = "clear"
     CLOUDY = "cloudy"
+    FOG = "fog"
     RAIN = "rain"
     SNOW = "snow"
 
@@ -20,10 +23,12 @@ class SunPhase(str, Enum):
 
 
 def condition_for_code(code: int) -> Condition:
-    """Map a WMO weather code to one of four scene categories."""
+    """Map a WMO weather code to one of five scene categories."""
     if code in (0, 1):
         return Condition.CLEAR
-    if code in (2, 3, 45, 48):
+    if code in (45, 48):
+        return Condition.FOG     # fog / depositing rime fog
+    if code in (2, 3):
         return Condition.CLOUDY
     if code in (71, 72, 73, 74, 75, 76, 77, 85, 86):
         return Condition.SNOW
@@ -54,6 +59,8 @@ class Weather:
     sunrise: datetime
     sunset: datetime
     precip: Optional[PrecipWindow] = None
+    humidity: int = 0           # relative humidity, percent
+    wind_mph: float = 0.0       # current wind speed, mph
 
 
 @dataclass(frozen=True)
@@ -74,6 +81,13 @@ def _window_label(start: datetime, end: datetime) -> str:
 
 PRECIP_THRESHOLD = 30   # percent chance that counts as a "rainy/snowy" hour
 _TRACE_IN = 0.1         # hide amounts below this (inches)
+
+# --- advisory / visual trigger thresholds (no config knobs by design) ---
+AQI_UNHEALTHY = 101     # US AQI: "unhealthy for sensitive groups" and worse
+HUMID_PCT = 80          # relative humidity that makes it feel muggy / keep windows shut
+HOT_F = 90              # temp or feels-like that warrants a "hot day" hero
+WINDY_MPH = 22          # sustained wind that warrants a "windy" hero
+CLEAN_AQI = 40          # US AQI at/under which the air is genuinely great
 
 
 def precip_window(hourly: dict, now: datetime, now_precip: bool = False,
@@ -199,13 +213,55 @@ def flags(weather: Weather, now: datetime, trash_days: List[str]) -> List[Flag]:
         out.append(Flag("UV VERY HIGH", "SUNSCREEN"))
     elif uv >= 6:
         out.append(Flag("UV HIGH", "SUNSCREEN"))
+    adv = _window_advisory(weather)
+    if adv is not None:
+        out.append(adv)
+    return out
+
+
+def _window_advisory(weather: Weather) -> Optional[Flag]:
+    """A single glanceable 'shut the windows' beat. Bad air and high humidity both
+    boil down to the same action, so they share one flag (no double-up): air wins on
+    severity, otherwise mugginess. Returns None when the air is fine and it's dry."""
     aqi = weather.aqi
     if aqi >= 301:
-        out.append(Flag("AIR QUALITY", "HAZARDOUS"))
-    elif aqi >= 201:
-        out.append(Flag("AIR QUALITY", "VERY UNHEALTHY"))
-    elif aqi >= 151:
-        out.append(Flag("AIR QUALITY", "UNHEALTHY"))
-    elif aqi >= 101:
-        out.append(Flag("AIR QUALITY", "UNHEALTHY (SENS)"))
-    return out
+        return Flag("WINDOWS", "HAZARDOUS")
+    if aqi >= 201:
+        return Flag("WINDOWS", "VERY BAD")
+    if aqi >= 151:
+        return Flag("WINDOWS", "UNHEALTHY")
+    if aqi >= AQI_UNHEALTHY:
+        return Flag("WINDOWS", "BAD AIR")
+    if weather.humidity >= HUMID_PCT:
+        return Flag("WINDOWS", "HUMID")
+    return None
+
+
+# --- verbal verdict ---------------------------------------------------------
+_GO_TEMP_LO, _GO_TEMP_HI = 55, 78    # comfortable band (F)
+_GO_UV_MAX = 7                       # at/under "high" -> still fine with a hat
+_GO_WIND_MAX = 15                    # a pleasant breeze, no more
+_STAY_TEMP_LO, _STAY_TEMP_HI = 25, 95   # outside this, it's punishing
+_STAY_AQI = 151                      # genuinely unhealthy for everyone
+
+
+def summary(weather: Weather, now: datetime) -> Optional[str]:
+    """A short, tasteful one-liner verdict, or None when the day is unremarkable.
+
+    'GO OUTSIDE' for a genuinely lovely window; 'STAY IN' when it's punishing
+    (extreme temperature, active precip, unhealthy air, or strong wind). Anything
+    in between gets no verdict — we only speak up when it's worth it."""
+    feels = weather.feels_like
+    raining = weather.precip is not None and weather.precip.ongoing
+    if (feels <= _STAY_TEMP_LO or feels >= _STAY_TEMP_HI
+            or raining or weather.aqi >= _STAY_AQI
+            or weather.wind_mph >= WINDY_MPH):
+        return "STAY IN"
+    nice = (_GO_TEMP_LO <= weather.temp <= _GO_TEMP_HI
+            and _GO_TEMP_LO <= feels <= _GO_TEMP_HI
+            and weather.condition in (Condition.CLEAR, Condition.CLOUDY)
+            and weather.precip_prob < PRECIP_THRESHOLD
+            and weather.aqi <= CLEAN_AQI
+            and weather.uv_index <= _GO_UV_MAX
+            and weather.wind_mph <= _GO_WIND_MAX)
+    return "GO OUTSIDE" if nice else None

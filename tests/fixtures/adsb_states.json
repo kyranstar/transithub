@@ -1,0 +1,13 @@
+{
+  "now": 1779694130123,
+  "resultCount": 6,
+  "ptime": 12,
+  "aircraft": [
+    {"hex": "a64d4d", "type": "adsb_icao", "flight": "JBU1727 ", "r": "N505JB", "t": "A320", "alt_baro": "ground", "gs": 0.1, "track": null, "lat": 40.687366, "lon": -73.927303, "squawk": "2000", "category": "A3", "dst": 0.41, "dir": 269.3},
+    {"hex": "a5d68a", "type": "adsb_icao", "flight": "UAL1624 ", "r": "N47533", "t": "B39M", "alt_baro": 350, "gs": 172.2, "track": 205.08, "lat": 40.6855, "lon": -73.9223, "squawk": "7110", "category": "A3", "dst": 0.31, "dir": 200.1},
+    {"hex": "400f0a", "type": "adsb_icao", "flight": "BAW178  ", "r": "G-STBA", "t": "B77W", "alt_baro": 35000, "gs": 488.0, "track": 61.0, "lat": 40.6921, "lon": -73.9215, "squawk": "4512", "category": "A5", "dst": 0.34, "dir": 88.0},
+    {"hex": "a28be1", "type": "adsb_icao", "flight": "UAL415  ", "r": "N77296", "t": "B739", "alt_baro": 8175, "gs": 299.4, "track": 218.0, "lat": 40.6760, "lon": -73.8980, "squawk": "2004", "category": "A3", "dst": 1.45, "dir": 216.0},
+    {"hex": "a641bf", "type": "adsb_icao", "flight": "DAL336  ", "r": "N502DX", "t": "A21N", "alt_baro": 18500, "gs": 402.0, "track": 234.26, "lat": 40.7717, "lon": -73.6419, "squawk": "1432", "category": "A3", "dst": 13.55, "dir": 56.0},
+    {"hex": "ab1c2d", "type": "adsb_icao", "flight": "NKS221  ", "r": "N921NK", "t": "A20N", "alt_baro": null, "gs": 270.0, "track": 15.0, "lat": 40.70, "lon": -73.93, "squawk": "3614", "category": "A3", "dst": 0.9, "dir": 12.0}
+  ]
+}

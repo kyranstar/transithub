@@ -168,5 +168,64 @@ def snow(img, frame, seed=5, count=28):
             px[x, int(y)] = lerp(px[x, int(y)], (236, 242, 255), 0.95)
 
 
+def fog(img, frame, color=(150, 154, 162)):
+    """Slow drifting banks of gray. Two soft sine bands of differing speed cross the
+    panel and beat against each other, so the murk shifts and shimmers without ever
+    looking like discrete shapes."""
+    w, h = img.size
+    px = img.load()
+    t = frame * 0.06
+    for y in range(h):
+        ny = y / (h - 1)
+        for x in range(w):
+            band = (math.sin(x * 0.16 + t + ny * 1.3)
+                    + 0.7 * math.sin(x * 0.07 - t * 1.7 + y * 0.25))
+            a = 0.18 + 0.32 * (band + 1.7) / 3.4          # gentle, always a little haze
+            px[x, y] = lerp(px[x, y], color, max(0.0, min(0.6, a)))
+
+
+def pulsing_sun(img, cx, cy, r, frame, color=(255, 168, 64)):
+    """A hot, swollen sun that breathes. The glow radius and intensity ride a slow
+    sine so it throbs like heat-shimmer; a hotter core keeps it reading as the sun."""
+    breathe = 0.5 + 0.5 * math.sin(frame * 0.22)
+    glow_sun(img, cx, cy, r, color=color, intensity=0.55 + 0.45 * breathe)
+    w, h = img.size
+    px = img.load()
+    core = max(1, r - 2)
+    hot = lerp(color, (255, 244, 210), 0.6)
+    for yy in range(cy - core, cy + core + 1):
+        for xx in range(cx - core, cx + core + 1):
+            if 0 <= xx < w and 0 <= yy < h and math.hypot(xx - cx, yy - cy) <= core:
+                px[xx, yy] = hot
+
+
+def gusts(img, frame, color=(214, 224, 236)):
+    """Streaks of wind blowing left-to-right. Each is a short comet that wraps the
+    panel at its own speed and height, so the air looks like it's really moving."""
+    w, h = img.size
+    px = img.load()
+    # (row, speed, length, phase) — staggered phases so the sky is never empty.
+    streaks = ((4, 2.6, 9, 8), (12, 1.9, 5, 30), (20, 3.1, 13, 50), (26, 2.2, 7, 18))
+    span = w + 16
+    for y0, sp, length, phase in streaks:
+        head = (frame * sp + phase) % span - length
+        for k in range(length):
+            x = int(head - k)
+            a = (1 - k / length) * 0.85               # fades toward the tail
+            if 0 <= x < w and 0 <= y0 < h:
+                px[x, y0] = lerp(px[x, y0], color, a)
+
+
+def haze(img, frame, color, alpha=0.45):
+    """A breathing wash of `color` over the whole frame — for muggy air or a bad-AQI
+    sky. The alpha pulses faintly so the murk feels alive instead of a flat filter."""
+    w, h = img.size
+    px = img.load()
+    pulse = alpha * (0.85 + 0.15 * math.sin(frame * 0.12))
+    for y in range(h):
+        for x in range(w):
+            px[x, y] = lerp(px[x, y], color, pulse)
+
+
 def dim(img, factor=0.6):
     return Image.eval(img, lambda v: int(v * factor))

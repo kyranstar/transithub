@@ -65,7 +65,7 @@ def test_loads_weather_config(tmp_path):
         trains:
           - {line: "L", stop_id: "L16", direction: "N"}
         location: {latitude: 40.5, longitude: -73.9}
-        weather: {enabled: true, units: celsius, poll_seconds: 300, rundown_every_minutes: 10, rundown_seconds: 45}
+        weather: {enabled: true, units: celsius, poll_seconds: 300, rundown_every_minutes: 10}
         notifications: {sunrise: false, sunset: true}
         trash: {days: ["tuesday", "friday"]}
     """))
@@ -82,5 +82,36 @@ def test_weather_defaults(tmp_path):
     """))
     assert abs(cfg.location.latitude - 40.70) < 0.01
     assert cfg.weather.enabled is True and cfg.weather.units == "fahrenheit"
-    assert cfg.weather.rundown_every_minutes == 15 and cfg.weather.rundown_seconds == 60
+    assert cfg.weather.rundown_every_minutes == 7 and cfg.weather.rundown_rounds == 2
     assert cfg.notifications.sunrise is True and cfg.trash.days == ["monday"]
+
+
+def test_ambient_defaults(tmp_path):
+    cfg = load_config(_write(tmp_path, """
+        trains:
+          - {line: "L", stop_id: "L16", direction: "N"}
+    """))
+    assert cfg.night.bedtime == "21:30"
+    assert cfg.night.evening_brightness == 0.5 and cfg.night.night_brightness == 0.16
+    assert cfg.sky.enabled is True and cfg.space.enabled is True
+    assert cfg.sky.iss and cfg.sky.planes and cfg.sky.moon
+    assert cfg.sky.plane_radius_nm == 3.0 and cfg.sky.plane_max_alt_ft == 12000
+    assert cfg.space.humans and cfg.space.earth
+    assert cfg.local.enabled is True and cfg.local.markets == []
+
+
+def test_ambient_overrides(tmp_path):
+    cfg = load_config(_write(tmp_path, """
+        trains:
+          - {line: "L", stop_id: "L16", direction: "N"}
+        night: {bedtime: "22:00", night_brightness: 0.1}
+        sky: {planes: false, plane_radius_nm: 1.5}
+        local:
+          markets:
+            - {name: "TEST MKT", day: "monday", until: "5"}
+    """))
+    assert cfg.night.bedtime == "22:00" and cfg.night.night_brightness == 0.1
+    # sub-toggles are independent: planes off, ISS still on
+    assert cfg.sky.enabled is True and cfg.sky.planes is False and cfg.sky.iss is True
+    assert cfg.sky.plane_radius_nm == 1.5
+    assert cfg.local.markets[0]["name"] == "TEST MKT"

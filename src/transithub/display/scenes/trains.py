@@ -16,4 +16,4 @@ class TrainScene(Scene):
 
     def render(self, elapsed_ms: int) -> Image.Image:
         return self._renderer.render(
-            self._store.snapshot(), elapsed_ms, self._now(), self._store.alerts())
+            self._store.snapshot(), elapsed_ms, self._now(), self._store.line_alerts())
