@@ -74,10 +74,10 @@ def test_max_altitude_keeps_only_audible_traffic():
     # With an audibility ceiling, the high cruisers (BAW178 35000, DAL336 18500) drop
     # and the low climbing/descending plane (UAL415 8175) becomes the one overhead —
     # so the scene tracks a plane you could actually hear, not a jet at cruise.
-    p = nearest_plane(ADSB, LAT, LON, min_alt_ft=1000, max_alt_ft=12000)
+    p = nearest_plane(ADSB, LAT, LON, min_alt_ft=1000, max_alt_ft=10000)
     assert p is not None and p.callsign == "UAL415" and p.alt_ft == 8175
     cs = {x.callsign for x in parse_aircraft(ADSB, LAT, LON, min_alt_ft=1000,
-                                             max_alt_ft=12000)}
+                                             max_alt_ft=10000)}
     assert "BAW178" not in cs and "DAL336" not in cs
 
 

@@ -36,8 +36,9 @@ ROUTE_URL = "https://hexdb.io/api/v1/route/icao/{callsign}"
 DEFAULT_RADIUS_NM = 3              # ~3.5 mi: close enough to genuinely be "above you"
 DEFAULT_MIN_ALT_FT = 1000          # ignore aircraft on approach/departure on the deck
 # Only count planes low enough to actually hear, so "overhead" tracks what you'd
-# notice outside — high cruising traffic (35,000 ft) is constant but inaudible.
-DEFAULT_MAX_ALT_FT = 12000
+# notice outside — a jet at cruise (~35,000 ft) is constant but inaudible. 10,000 ft
+# is a sensible ceiling for traffic you'd notice from the ground.
+DEFAULT_MAX_ALT_FT = 10000
 COMPASS = ("N", "NE", "E", "SE", "S", "SW", "W", "NW")
 
 # A small built-in ICAO -> IATA map for busy airports, so the common routes
