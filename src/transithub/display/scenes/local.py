@@ -1,19 +1,17 @@
-"""Neighborhood scenes: a farmers market open today, and a free outdoor event.
+"""Neighborhood scene: the farmers market that's open near home today.
 
-Both keep to one idea on three short lines (type / place / time, or type / time /
-place) over a small, tasteful motif drawn here — a striped market awning with
-produce, and a film frame for events. Every line is fit-checked against the 64px
-panel and shortened word-by-word before it can clip. The sources read the latest
-``ctx.local`` snapshot; the event source cycles through the day's list across
-plays so a glance isn't always the same one."""
+One idea on three short lines ("MARKET TODAY / <place> / UNTIL <x>") over a
+small striped market awning with produce. Every line is fit-checked against the
+64px panel and shortened word-by-word before it can clip. The source is built
+from the curated config specs and reads ``ctx.now`` to decide if a market is open
+today — there's no background poller."""
 from __future__ import annotations
 
 from typing import List, Optional
 
 from PIL import Image
 
-from ...local.events import Event, short_place
-from ...local.markets import Market
+from ...local.markets import Market, MarketSpec, market_today, short_place
 from .. import scenery as S
 from .base import Scene
 from ..director import Context
@@ -60,7 +58,7 @@ _PRODUCE = [(236, 96, 72), (250, 196, 70), (140, 206, 110), (228, 130, 60)]
 
 
 class MarketScene(Scene):
-    """"MARKET TODAY / <place> / <until>" under a striped stall awning."""
+    """"MARKET TODAY / <place> / UNTIL <x>" under a striped stall awning."""
     duration_ms = DURATION_MS
 
     def __init__(self, market: Market, cols: int = COLS, rows: int = ROWS):
@@ -68,7 +66,7 @@ class MarketScene(Scene):
         self.cols, self.rows = cols, rows
 
     def lines(self) -> List[str]:
-        return ["MARKET TODAY", short_place(self.market.name), _fit(self.market.close_label)]
+        return ["MARKET TODAY", short_place(self.market.name), _fit(f"UNTIL {self.market.until}")]
 
     def _awning(self, img: Image.Image, frame: int) -> None:
         px = img.load()
@@ -107,94 +105,22 @@ class MarketScene(Scene):
 
 
 # --------------------------------------------------------------------------
-# Event
-# --------------------------------------------------------------------------
-_E_BG = [(0.0, (26, 22, 52)), (1.0, (12, 12, 30))]    # dusk-violet wash
-_E_OUT = (8, 8, 20)
-_E_TYPE = (140, 210, 255)      # type headline — cool blue
-_E_TIME = (255, 232, 150)      # time — warm
-_E_PLACE = (230, 226, 248)
-_REEL = (235, 238, 250)
-_SPROCKET = (250, 220, 120)
-
-
-class EventScene(Scene):
-    """"<type> / <time> / <place>" beside a little film-strip motif."""
-    duration_ms = DURATION_MS
-
-    def __init__(self, event: Event, cols: int = COLS, rows: int = ROWS):
-        self.event = event
-        self.cols, self.rows = cols, rows
-
-    def lines(self) -> List[str]:
-        return [_fit(self.event.kind), _fit(self.event.when_label), short_place(self.event.venue)]
-
-    def _film_strip(self, img: Image.Image, frame: int) -> None:
-        # A film strip running across the top: two black bands with scrolling
-        # sprocket holes and a couple of bright "frames" — reads as movie/show.
-        px = img.load()
-        top, h = 0, 6
-        for x in range(self.cols):
-            for y in range(top, top + h):
-                px[x, y] = (10, 10, 16)
-        for x in range((frame) % 4, self.cols, 4):    # scrolling sprockets
-            for y in (top + 1, top + h - 2):
-                if 0 <= x < self.cols:
-                    px[x, y] = _SPROCKET
-        for fx in range(2, self.cols - 4, 14):         # little lit frames
-            for x in range(fx, min(fx + 8, self.cols)):
-                px[x, top + 2] = _REEL
-                px[x, top + 3] = _REEL
-        for x in range(self.cols):                     # shadow under the strip
-            if top + h < self.rows:
-                px[x, top + h] = (6, 6, 14)
-
-    def render(self, elapsed_ms: int) -> Image.Image:
-        frame = elapsed_ms // 100
-        img = Image.new("RGB", (self.cols, self.rows), (0, 0, 0))
-        S.gradient(img, _E_BG)
-        self._film_strip(img, frame)
-        type_l, time_l, place_l = self.lines()
-        _centered(img, 8, type_l, _E_TYPE, _E_OUT)
-        _centered(img, 16, time_l, _E_TIME, _E_OUT)
-        _centered(img, 24, place_l, _E_PLACE, _E_OUT)
-        if elapsed_ms < 600:
-            return Image.blend(Image.new("RGB", (self.cols, self.rows), (0, 0, 0)),
-                               img, elapsed_ms / 600)
-        return img
-
-
-# --------------------------------------------------------------------------
-# Sources
+# Source
 # --------------------------------------------------------------------------
 class MarketSource:
-    """Shows the single nearest market open today, from ``ctx.local.market``."""
+    """Shows the configured market open today, decided from ``ctx.now``.
+
+    Holds the parsed config specs; ``poll`` returns a ``MarketScene`` when one of
+    them is open today, else None. No network, no holder — just the specs and the
+    clock."""
     name = "market"
 
-    def __init__(self, cols: int = COLS, rows: int = ROWS):
+    def __init__(self, specs: List[MarketSpec], cols: int = COLS, rows: int = ROWS):
+        self.specs = list(specs)
         self.cols, self.rows = cols, rows
 
     def poll(self, ctx: Context) -> Optional[Scene]:
-        local = getattr(ctx, "local", None)
-        market = getattr(local, "market", None) if local else None
+        market = market_today(self.specs, ctx.now)
         if market is None:
             return None
         return MarketScene(market, self.cols, self.rows)
-
-
-class EventSource:
-    """Cycles through today's qualifying events across plays (from ``ctx.local``)."""
-    name = "events"
-
-    def __init__(self, cols: int = COLS, rows: int = ROWS):
-        self.cols, self.rows = cols, rows
-        self._i = 0
-
-    def poll(self, ctx: Context) -> Optional[Scene]:
-        local = getattr(ctx, "local", None)
-        events = list(getattr(local, "events", []) or []) if local else []
-        if not events:
-            return None
-        event = events[self._i % len(events)]
-        self._i += 1
-        return EventScene(event, self.cols, self.rows)

@@ -1,138 +1,118 @@
-"""Offline tests for the farmers-markets client (NYC Open Data 8vwk-6iz2).
+"""Offline tests for the config-driven farmers-market logic.
 
-The injected fetcher returns the trimmed real response in
-tests/fixtures/markets_sample.json, so nothing here touches the network. `now`
-is pinned to a known weekday/season to make "open today" deterministic."""
+No network, no Socrata: markets come from plain config dicts (as parsed from
+YAML). ``now`` is pinned so "open today" — today's weekday in season — is
+deterministic. The Maria Hernandez example from the owner is the backbone case:
+every Saturday, 2026-05-23 to 2026-11-22, until 3."""
 from __future__ import annotations
 
-import json
 from datetime import datetime
-from pathlib import Path
 
-from transithub.local.markets import MarketsClient, Market, parse_close_label, weekdays_of
+from transithub.local.markets import (Market, MarketSpec, market_today,
+                                       parse_specs)
 
-FIX = Path(__file__).parent / "fixtures"
-SAMPLE = json.loads((FIX / "markets_sample.json").read_text())
+# Maria Hernandez: every Saturday, in season 2026-05-23 .. 2026-11-22, until 3.
+MARIA = {"name": "MARIA HERNANDEZ", "day": "saturday",
+         "season": ["2026-05-23", "2026-11-22"], "until": "3"}
 
-HOME = (40.70, -73.92)
-
-# Fixture weekdays (in-season month): a Wednesday and a Saturday in summer.
-WED = datetime(2025, 7, 16, 10, 0)     # Hope Ballfield (Wed) is nearest & open
-SAT = datetime(2025, 7, 19, 10, 0)     # Maria Hernandez (Sat) is nearest & open
-TUE = datetime(2025, 7, 15, 10, 0)     # no market open on Tuesday in the fixture
-JAN_WED = datetime(2025, 1, 15, 10, 0)  # winter Wednesday: seasonal markets out of season
+IN_SEASON_SAT = datetime(2026, 5, 30, 10, 0)    # a Saturday inside the window
+IN_SEASON_FRI = datetime(2026, 5, 29, 10, 0)    # a Friday inside the window
+BEFORE_SEASON_SAT = datetime(2026, 5, 16, 10, 0)  # Saturday a week before season opens
+AFTER_SEASON_SAT = datetime(2026, 11, 28, 10, 0)  # Saturday after season closes
 
 
-def _client(now, **kw):
-    return MarketsClient(HOME[0], HOME[1], fetcher=lambda url: SAMPLE["markets"], now=lambda: now, **kw)
+# --- spec parsing ----------------------------------------------------------
+def test_parse_basic_entry():
+    specs = parse_specs([MARIA])
+    assert len(specs) == 1
+    s = specs[0]
+    assert s.name == "MARIA HERNANDEZ" and s.weekday == 5 and s.until == "3"
+    assert (s.season_start, s.season_end) == (
+        datetime(2026, 5, 23).date(), datetime(2026, 11, 22).date())
 
 
-# --- weekday parsing -------------------------------------------------------
-def test_weekdays_single():
-    assert weekdays_of("Wednesday") == {2}
-    assert weekdays_of("Saturday") == {5}
+def test_parse_day_case_insensitive():
+    specs = parse_specs([{"name": "X", "day": "SaTuRdAy", "until": "2"}])
+    assert specs and specs[0].weekday == 5
 
 
-def test_weekdays_separators_and_typos():
-    assert weekdays_of("Monday & Wedneday") == {0, 2}          # typo 'Wedneday'
-    assert weekdays_of("Tuesday\nThursday\nSaturday") == {1, 3, 5}
-    assert weekdays_of("Tusday & Saturday") == {1, 5}          # typo 'Tusday'
-    assert weekdays_of("Wednesday & Sunday (starting 5/5)") == {2, 6}
+def test_parse_missing_season_means_always():
+    specs = parse_specs([{"name": "X", "day": "tuesday", "until": "2"}])
+    assert specs and specs[0].season_start is None and specs[0].season_end is None
 
 
-def test_weekdays_range():
-    assert weekdays_of("Mon-Sat") == {0, 1, 2, 3, 4, 5}
-    assert weekdays_of("Tuesday-Friday") == {1, 2, 3, 4}
+def test_parse_skips_bad_entries():
+    specs = parse_specs([
+        {"name": "Good", "day": "monday", "until": "1"},
+        {"name": "No day", "until": "1"},            # missing/unknown day -> skipped
+        {"name": "Bad day", "day": "funday", "until": "1"},  # unknown weekday -> skipped
+        {"day": "monday", "until": "1"},             # missing name -> skipped
+        "not a dict",                                # wrong type -> skipped
+    ])
+    assert [s.name for s in specs] == ["Good"]
 
 
-def test_weekdays_unparseable_is_empty():
-    assert weekdays_of("TBD") == set()
-    assert weekdays_of("") == set()
-
-
-# --- close-time parsing ----------------------------------------------------
-def test_close_label_basic():
-    assert parse_close_label("9 a.m. - 3 p.m.") == "UNTIL 3"
-    assert parse_close_label("8 a.m. - 3 p.m.") == "UNTIL 3"
-
-
-def test_close_label_no_space_and_halfhour():
-    assert parse_close_label("9a.m. - 2 p.m.") == "UNTIL 2"
-    assert parse_close_label("9 a.m. - 2:30 p.m.") == "UNTIL 2:30"
-
-
-def test_close_label_noon_and_morning_close():
-    assert parse_close_label("noon - 3 p.m.") == "UNTIL 3"
-    assert parse_close_label("8 a.m. - 11 a.m.") == "UNTIL 11AM"   # morning close keeps am marker
-
-
-def test_close_label_multi_segment_takes_a_close():
-    # "8 a.m. - 2 p.m. (W); 9 a.m. - 2 p.m. (SU)" both close at 2pm
-    assert parse_close_label("8 a.m. - 2 p.m. (W); 9 a.m. - 2 p.m. (SU)") == "UNTIL 2"
-
-
-def test_close_label_unparseable_is_none():
-    assert parse_close_label("hours vary") is None
-    assert parse_close_label("") is None
-
-
-# --- selection: nearest open today ----------------------------------------
-def test_picks_nearest_open_today_wed():
-    m = _client(WED).best()
+# --- market_today: weekday + season window ---------------------------------
+def test_in_season_saturday_shows():
+    m = market_today(parse_specs([MARIA]), IN_SEASON_SAT)
     assert isinstance(m, Market)
-    assert "HOPE" in m.name or "Hope" in m.name
-    assert m.close_label == "UNTIL 3"
-    assert m.dist_km < 0.6
+    assert m.name == "MARIA HERNANDEZ" and m.until == "3"
 
 
-def test_picks_nearest_open_today_sat():
-    m = _client(SAT).best()
-    assert m is not None and "HERNANDEZ" in m.name.upper()
-    assert m.dist_km < 0.7
+def test_wrong_day_is_none():
+    assert market_today(parse_specs([MARIA]), IN_SEASON_FRI) is None
 
 
-def test_none_when_nothing_open_today():
-    assert _client(TUE).best() is None
+def test_before_season_is_none():
+    assert market_today(parse_specs([MARIA]), BEFORE_SEASON_SAT) is None
 
 
-def test_seasonal_excluded_in_winter_but_year_round_kept():
-    # In January, Wednesday: Hope Ballfield is seasonal (out), no year-round Wed market
-    # within radius, so nothing qualifies.
-    assert _client(JAN_WED).best() is None
+def test_after_season_is_none():
+    assert market_today(parse_specs([MARIA]), AFTER_SEASON_SAT) is None
 
 
-def test_year_round_open_in_winter():
-    # McCarren (Saturday, year-round) qualifies on a winter Saturday even though
-    # seasonal Saturday markets are out of season.
-    m = _client(datetime(2025, 1, 18, 10, 0)).best()
-    assert m is not None and "MCCARREN" in m.name.upper()
+def test_season_bounds_inclusive():
+    # The exact start and end dates both count as in season.
+    start_sat = datetime(2026, 5, 23, 10, 0)        # season_start, a Saturday
+    end_sun = datetime(2026, 11, 22, 9, 0)          # season_end (a Sunday)
+    assert market_today(parse_specs([MARIA]), start_sat) is not None
+    sun_market = {"name": "SUNDAY MKT", "day": "sunday",
+                  "season": ["2026-05-24", "2026-11-22"], "until": "2"}
+    assert market_today(parse_specs([sun_market]), end_sun) is not None
 
 
-# --- radius + latest-year + robustness ------------------------------------
-def test_radius_filters_far_markets():
-    # Bay Ridge (Saturday) is ~13 km away; with a tiny radius nothing qualifies Sat
-    # except the near Saturday markets — shrink radius below the nearest Sat market.
-    assert _client(SAT, radius_km=0.1).best() is None
+def test_no_season_spec_always_in_season():
+    spec = {"name": "ALL YEAR", "day": "saturday", "until": "4"}
+    # A summer Saturday and a deep-winter Saturday both qualify.
+    assert market_today(parse_specs([spec]), datetime(2026, 7, 18, 10, 0)) is not None
+    assert market_today(parse_specs([spec]), datetime(2026, 1, 17, 10, 0)) is not None
 
 
-def test_latest_year_only():
-    # The 2024 "Stale Year Market" (Wednesday, on top of home) must be ignored;
-    # the Wednesday winner is the 2025 Hope Ballfield, not the stale row.
-    m = _client(WED).best()
-    assert m is not None and "STALE" not in m.name.upper()
+def test_open_ended_season_one_sided():
+    # Only an end bound: open before it, closed after it.
+    spec = parse_specs([{"name": "TILL FALL", "day": "saturday",
+                         "season": [None, "2026-09-26"], "until": "3"}])
+    assert market_today(spec, datetime(2026, 6, 6, 10, 0)) is not None     # before end
+    assert market_today(spec, datetime(2026, 10, 3, 10, 0)) is None        # after end
 
 
-def test_never_crashes_on_garbage():
-    bad = [{"marketname": "X", "latitude": "nope", "longitude": None,
-            "daysoperation": "Wednesday", "hoursoperations": "9 a.m. - 3 p.m.",
-            "open_year_round": "Yes", "year": "2025"},
-           {"marketname": "Y"}]  # missing everything
-    c = MarketsClient(HOME[0], HOME[1], fetcher=lambda url: bad, now=lambda: WED)
-    assert c.best() is None       # the only structured row has an unparseable location
+# --- multiple specs --------------------------------------------------------
+def test_multiple_specs_returns_first_match():
+    sat_a = {"name": "FIRST SAT", "day": "saturday",
+             "season": ["2026-05-23", "2026-11-22"], "until": "3"}
+    sat_b = {"name": "SECOND SAT", "day": "saturday",
+             "season": ["2026-05-23", "2026-11-22"], "until": "2"}
+    m = market_today(parse_specs([sat_a, sat_b]), IN_SEASON_SAT)
+    assert m is not None and m.name == "FIRST SAT"   # first matching spec wins
 
 
-def test_fetch_failure_returns_none():
-    def boom(url):
-        raise RuntimeError("network down")
-    c = MarketsClient(HOME[0], HOME[1], fetcher=boom, now=lambda: WED)
-    assert c.best() is None
+def test_multiple_specs_picks_the_open_one():
+    sun = {"name": "SUNDAY MKT", "day": "sunday", "until": "2"}
+    sat = {"name": "SATURDAY MKT", "day": "saturday", "until": "3"}
+    m = market_today(parse_specs([sun, sat]), IN_SEASON_SAT)
+    assert m is not None and m.name == "SATURDAY MKT"  # only Saturday is open today
+
+
+def test_empty_specs_is_none():
+    assert market_today([], IN_SEASON_SAT) is None
+    assert market_today(parse_specs([]), IN_SEASON_SAT) is None

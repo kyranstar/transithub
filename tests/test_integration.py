@@ -5,20 +5,20 @@ from collections import Counter
 from datetime import datetime, timedelta
 
 from transithub.__main__ import _build_director
-from transithub.config import Config
+from transithub.config import Config, LocalConfig
 from transithub.display.sign import SignRenderer
 from transithub.health import HealthMonitor
-from transithub.local import LocalData, LocalHolder
-from transithub.local.events import Event
-from transithub.local.markets import Market
 from transithub.models import TrackedTrain
+from transithub.sky import SkyData
 from transithub.space import SpaceData
 from transithub.space.humans import HumansInSpace
-from transithub.sky import SkyData
 from transithub.store import ArrivalStore, Holder, WeatherHolder
 from transithub.weather.model import Condition, Weather
 
 BASE = datetime(2026, 5, 25, 12, 0)
+# A market configured for BASE's own weekday so it's "open today" during the run.
+MARKET = [{"name": "MARIA HERNANDEZ", "day": BASE.strftime("%A").lower(),
+           "season": ["2026-01-01", "2026-12-31"], "until": "3"}]
 
 
 def _weather():
@@ -28,24 +28,18 @@ def _weather():
                    sunset=BASE.replace(hour=20, minute=0), humidity=40, wind_mph=5.0)
 
 
-def _holders(weather=None, humans=None, market=None, events=()):
+def _holders(weather=None, humans=None):
     wh = WeatherHolder()
     wh.set(weather)
-    local = LocalHolder()
-    local._data = LocalData(market=market, events=list(events))
-    return {
-        "weather": wh,
-        "sky": Holder(SkyData()),
-        "space": Holder(SpaceData(humans=humans)),
-        "local": local,
-    }
+    return {"weather": wh, "sky": Holder(SkyData()),
+            "space": Holder(SpaceData(humans=humans))}
 
 
-def _director(holders):
-    cfg = Config(trains=[TrackedTrain(line="L", stop_id="L16", direction="N")])
-    renderer = SignRenderer(cfg)
-    store = ArrivalStore(1)
-    return _build_director(cfg, renderer, store, holders, HealthMonitor())
+def _director(holders, markets=()):
+    cfg = Config(trains=[TrackedTrain(line="L", stop_id="L16", direction="N")],
+                 local=LocalConfig(markets=list(markets)))
+    return _build_director(cfg, SignRenderer(cfg), ArrivalStore(1), holders,
+                           HealthMonitor())
 
 
 def _run(director, minutes=60, step_ms=5000):
@@ -62,29 +56,25 @@ def _run(director, minutes=60, step_ms=5000):
 def test_trains_are_the_backbone_but_scenes_rotate():
     holders = _holders(
         weather=_weather(),
-        humans=HumansInSpace(total=12, by_craft={"ISS": 9, "Tiangong": 3}),
-        market=Market("UNION SQ", "UNTIL 6", 2.0),
-        events=[Event("Movie Night", "PARK MOVIE", "8 PM", "TOMPKINS", 1.0,
-                      BASE.replace(hour=20))],
+        humans=HumansInSpace(total=12, by_craft={"ISS": 7, "Tiangong": 5}),
     )
-    seen = _run(_director(holders))
+    seen = _run(_director(holders, markets=MARKET))
 
     assert seen["TrainScene"] == max(seen.values())     # trains dominate the hour
     assert seen["WeatherScene"] > 0                      # the 6-minute rundown fires
     assert seen["HumansInSpaceScene"] > 0                # the rare fact appears
-    assert seen["MarketScene"] + seen["EventScene"] > 0  # neighborhood content shows
+    assert seen["MarketScene"] > 0                       # the configured market shows
 
 
 def test_calm_day_is_almost_all_trains():
-    # No ambient data at all -> essentially trains plus the weather rundown.
+    # No ambient data and no markets configured -> trains plus the weather rundown.
     seen = _run(_director(_holders(weather=_weather())))
     assert set(seen) <= {"TrainScene", "WeatherScene"}
     assert seen["TrainScene"] > seen["WeatherScene"]
 
 
 def test_night_dims_the_frame():
-    holders = _holders(weather=_weather())
-    director = _director(holders)
+    director = _director(_holders(weather=_weather()))
     # 2am: deep night -> the dimmer should pull brightness to the floor.
     night = datetime(2026, 5, 25, 2, 0)
     img = director.render(night, 1000)

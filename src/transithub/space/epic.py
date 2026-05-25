@@ -94,9 +94,12 @@ def process(raw: bytes, cols: int = COLS, rows: int = ROWS,
     sq = _square(bbox)
     disc = src.crop(sq)
     disc = disc.resize((disc_px, disc_px), Image.LANCZOS)
-    disc = ImageEnhance.Color(disc).enhance(1.35)      # modest saturation lift
-    disc = ImageEnhance.Contrast(disc).enhance(1.12)   # gentle contrast
-    disc = ImageEnhance.Brightness(disc).enhance(1.08)
+    # Punch up the (naturally dim) full-disc capture so the real photo reads on a
+    # dim LED panel: lift brightness, saturate the ocean blues / land greens, then
+    # crisp the cloud-vs-ocean contrast. Still a real photo — just graded for LEDs.
+    disc = ImageEnhance.Brightness(disc).enhance(1.34)
+    disc = ImageEnhance.Color(disc).enhance(1.5)
+    disc = ImageEnhance.Contrast(disc).enhance(1.22)
     frame = Image.new("RGB", (cols, rows), _BLACK)
     frame.paste(disc, ((cols - disc_px) // 2, (rows - disc_px) // 2))
     return frame

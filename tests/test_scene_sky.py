@@ -15,6 +15,22 @@ from transithub.profile import Profile
 from transithub.sky import IssPass, Plane, SkyData
 
 
+def _label_pixels(text, y, scale=1, cols=64):
+    """The (x, y) cells a centered label would light, matching ``_centered``."""
+    x0 = (cols - S.text_width(text, scale)) // 2
+    return set(S.FONT.iter_pixels(x0, y, text))
+
+
+def _shows_label(img, text, y, scale=1):
+    """True if the rendered frame has a lit (non-black) pixel at most of the
+    cells the centered ``text`` would occupy — i.e. that label is on screen."""
+    cells = _label_pixels(text, y, scale, img.size[0])
+    lit = sum(1 for (x, yy) in cells
+              if 0 <= x < img.size[0] and 0 <= yy < img.size[1]
+              and img.getpixel((x, yy)) != (0, 0, 0))
+    return cells and lit >= 0.8 * len(cells)
+
+
 # -- a fake weather snapshot whose sunset tracks the day being queried --------
 class W:
     """Stand-in weather exposing just the sun times the moon source reads.
@@ -113,15 +129,28 @@ def test_iss_scene_heads_up_shape_and_text():
     assert s.duration_ms and s.duration_ms > 0
     img = s.render(500)
     assert img.size == (64, 32) and img.mode == "RGB"
+    # the three heads-up lines all fit 64 px
+    assert S.text_width("ISS PASS") <= 64
     assert S.text_width("LOOK NW") <= 64
     assert S.text_width("8:43 PM") <= 64
 
 
-def test_iss_scene_overhead_shape():
+def test_iss_scene_heads_up_says_it_is_the_iss():
+    # The heads-up must label the event as the ISS, plus the time and direction.
+    when = datetime(2026, 5, 31, 20, 43)
+    img = IssPassScene(_pass(when), now=when, mode="heads_up").render(500)
+    assert _shows_label(img, "ISS PASS", 8)
+    assert _shows_label(img, "8:43 PM", 16)
+    assert _shows_label(img, "LOOK NW", 32 - 8)
+
+
+def test_iss_scene_overhead_says_iss_above_you():
     when = datetime(2026, 5, 31, 20, 43)
     s = IssPassScene(_pass(when), now=when, mode="overhead")
     img = s.render(500)
     assert img.size == (64, 32) and img.mode == "RGB"
+    assert _shows_label(img, "ISS", 32 - 17)
+    assert _shows_label(img, "ABOVE YOU", 32 - 8)
 
 
 # ============================================================ PLANE SCENE
@@ -133,6 +162,27 @@ def test_plane_scene_shape_and_text():
     assert img.size == (64, 32) and img.mode == "RGB"
     # the busiest line must fit
     assert S.text_width("SW 32000FT") <= 64
+
+
+def test_plane_scene_reads_as_overhead_with_route():
+    # With a route it shows ABOVE YOU + the route (not the bare callsign).
+    p = Plane(callsign="BAW178", alt_ft=35000, heading_deg=61.0, dir="NE",
+              route="JFK > LHR")
+    img = PlaneOverheadScene(p).render(500)
+    assert _shows_label(img, "ABOVE YOU", 10)
+    assert _shows_label(img, "JFK > LHR", 17)
+    assert _shows_label(img, "NE 35000FT", 24)
+    for line in ("ABOVE YOU", "JFK > LHR", "NE 35000FT"):
+        assert S.text_width(line) <= 64
+
+
+def test_plane_scene_falls_back_to_callsign_without_route():
+    p = Plane(callsign="UAL415", alt_ft=8175, heading_deg=218.0, dir="SW",
+              route=None)
+    img = PlaneOverheadScene(p).render(500)
+    assert _shows_label(img, "ABOVE YOU", 10)
+    assert _shows_label(img, "UAL415", 17)
+    assert S.text_width("UAL415") <= 64
 
 
 # ================================================================ SOURCES

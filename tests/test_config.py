@@ -94,7 +94,7 @@ def test_ambient_defaults(tmp_path):
     assert cfg.night.bedtime == "21:30"
     assert cfg.night.evening_brightness == 0.5 and cfg.night.night_brightness == 0.16
     assert cfg.sky.enabled is True and cfg.space.enabled is True
-    assert cfg.local.enabled is True and cfg.local.radius_km == 4.0
+    assert cfg.local.enabled is True and cfg.local.markets == []
 
 
 def test_ambient_overrides(tmp_path):
@@ -103,8 +103,10 @@ def test_ambient_overrides(tmp_path):
           - {line: "L", stop_id: "L16", direction: "N"}
         night: {bedtime: "22:00", night_brightness: 0.1}
         sky: {enabled: false}
-        local: {enabled: true, radius_km: 2.5}
+        local:
+          markets:
+            - {name: "TEST MKT", day: "monday", until: "5"}
     """))
     assert cfg.night.bedtime == "22:00" and cfg.night.night_brightness == 0.1
     assert cfg.sky.enabled is False
-    assert cfg.local.radius_km == 2.5
+    assert cfg.local.markets[0]["name"] == "TEST MKT"

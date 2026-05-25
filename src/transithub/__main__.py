@@ -7,7 +7,7 @@ from datetime import time as TimeOfDay
 from .clock import now as now_eastern
 from .config import load_config
 from .health import HealthMonitor
-from .local import EventsClient, LocalHolder, MarketsClient
+from .local import parse_specs
 from .mta.alerts import AlertsClient
 from .mta.feed import FeedClient, feed_dependency_available
 from .profile import Profile, day_profile
@@ -22,7 +22,7 @@ from .display.director import Context, Director, Slot
 from .display.dimmer import Dimmer
 from .display.sources import HealthSource, SunEventSource, WeatherRundownSource
 from .display.scenes.alert import AlertSource
-from .display.scenes.local import EventSource, MarketSource
+from .display.scenes.local import MarketSource
 from .display.scenes.sky import IssPassSource, MoonEventSource, PlaneOverheadSource
 from .display.scenes.space import EarthFromSpaceSource, HumansInSpaceSource
 from .display.scenes.trains import TrainScene
@@ -31,7 +31,7 @@ from .display.scenes.sun_event import SunEventScene
 
 HUMANS_POLL_S = 30 * 60
 EARTH_POLL_S = 60 * 60
-LOCAL_POLL_S = 6 * 3600
+HUMANS_STALE_DAYS = 21      # hide the people-in-space count if unconfirmed this long
 
 
 def _poller(stop_event, store, client, trains, poll_seconds, health=None):
@@ -98,17 +98,27 @@ def _sky_poller(stop_event, holder, client):
         stop_event.wait(SKY_POLL["plane"])
 
 
-def _space_poller(stop_event, holder, client):
+def _space_poller(stop_event, holder, client, now_fn=now_eastern):
+    """Humans-in-space + EPIC Earth, polled slowly. The humans count holds across
+    brief outages but is dropped once it hasn't been confirmed in HUMANS_STALE_DAYS,
+    so a months-old number never lingers on screen."""
     humans = earth = None
+    humans_at = None                      # wall-clock of the last good humans fetch
     last_h = last_e = None
     while not stop_event.is_set():
         mono = time.monotonic()
         if last_h is None or mono - last_h >= HUMANS_POLL_S:
             try:
-                humans = client.humans()
-                last_h = mono
+                got = client.humans()
             except Exception as exc:
                 print(f"[space] humans: {exc}")
+                got = None
+            last_h = mono
+            if got is not None:
+                humans, humans_at = got, now_fn()
+        if humans is not None and humans_at is not None and \
+                (now_fn() - humans_at).days >= HUMANS_STALE_DAYS:
+            humans = None                 # unconfirmed too long -> stop showing it
         if last_e is None or mono - last_e >= EARTH_POLL_S:
             try:
                 earth = client.earth()
@@ -117,15 +127,6 @@ def _space_poller(stop_event, holder, client):
                 print(f"[space] earth: {exc}")
         holder.set(SpaceData(humans=humans, earth=earth))
         stop_event.wait(60)
-
-
-def _local_poller(stop_event, holder):
-    while not stop_event.is_set():
-        try:
-            holder.poll()
-        except Exception as exc:
-            print(f"[local] {exc}")
-        stop_event.wait(LOCAL_POLL_S)
 
 
 def _make_display(cfg, args):
@@ -149,8 +150,8 @@ def _bedtime(cfg) -> TimeOfDay:
 
 def _build_director(cfg, renderer, store, holders, health):
     """Assemble the whole schedule in one readable place. `holders` is a dict of
-    the background snapshots: weather, sky, space, local. See docs/scene-framework.md
-    for the priority/cooldown rationale."""
+    the background snapshots: weather, sky, space. See docs/scene-framework.md for
+    the priority/cooldown rationale."""
     cols, rows = cfg.matrix.cols, cfg.matrix.rows
     bedtime = _bedtime(cfg)
     weather_holder = holders["weather"]
@@ -187,13 +188,11 @@ def _build_director(cfg, renderer, store, holders, health):
         slots.append(Slot(WeatherRundownSource(make_weather), priority=50,
                           cooldown_ms=cfg.weather.rundown_every_minutes * 60_000,
                           first_after_ms=30_000))
-    if cfg.local.enabled:
-        slots += [
-            Slot(MarketSource(cols, rows), priority=40, cooldown_ms=30 * 60_000,
-                 first_after_ms=3 * 60_000, profiles=DAY_EVENING),
-            Slot(EventSource(cols, rows), priority=40, cooldown_ms=30 * 60_000,
-                 first_after_ms=5 * 60_000, profiles=DAY_EVENING),
-        ]
+    market_specs = parse_specs(cfg.local.markets) if cfg.local.enabled else []
+    if market_specs:
+        slots.append(Slot(MarketSource(market_specs, cols, rows), priority=40,
+                          cooldown_ms=30 * 60_000, first_after_ms=3 * 60_000,
+                          profiles=DAY_EVENING))
     if cfg.space.enabled:
         slots += [
             Slot(HumansInSpaceSource(cols, rows), priority=30,
@@ -206,7 +205,7 @@ def _build_director(cfg, renderer, store, holders, health):
         w = weather_holder.get()
         return Context(now=now, mono_ms=mono_ms, profile=day_profile(now, w, bedtime),
                        weather=w, sky=holders["sky"].get(), space=holders["space"].get(),
-                       local=holders["local"].current, health=tuple(health.warnings()))
+                       health=tuple(health.warnings()))
 
     dimmer = Dimmer(evening_floor=cfg.night.evening_brightness,
                     night_floor=cfg.night.night_brightness, bedtime=bedtime)
@@ -249,12 +248,6 @@ def main(argv=None):
         "weather": WeatherHolder(),
         "sky": Holder(SkyData()),
         "space": Holder(SpaceData()),
-        "local": LocalHolder(
-            markets=MarketsClient(cfg.location.latitude, cfg.location.longitude,
-                                  cfg.local.radius_km),
-            events=EventsClient(cfg.location.latitude, cfg.location.longitude,
-                                cfg.local.radius_km),
-        ),
     }
     weather_client = WeatherClient(cfg.location.latitude, cfg.location.longitude,
                                    units=cfg.weather.units)
@@ -296,9 +289,6 @@ def main(argv=None):
     if cfg.space.enabled:
         threading.Thread(target=_space_poller, daemon=True,
                          args=(stop_event, holders["space"], SpaceClient())).start()
-    if cfg.local.enabled:
-        threading.Thread(target=_local_poller, daemon=True,
-                         args=(stop_event, holders["local"])).start()
 
     frame_dt = 1.0 / max(1, args.fps)
     start = time.monotonic()

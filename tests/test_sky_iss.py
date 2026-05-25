@@ -119,12 +119,15 @@ def test_client_iss_pass_none_on_fetch_error():
     assert SkyClient(LAT, LON, tle_fetcher=boom).iss_pass() is None
 
 
-def test_client_plane_uses_injected_states_fetcher():
+def test_client_plane_uses_injected_states_and_route_fetchers():
     import json as _json
-    states = _json.loads((FIX / "opensky_states.json").read_text())
-    c = SkyClient(LAT, LON, states_fetcher=lambda url: states)
+    states = _json.loads((FIX / "adsb_states.json").read_text())
+    route = _json.loads((FIX / "hexdb_route.json").read_text())
+    c = SkyClient(LAT, LON, states_fetcher=lambda url: states,
+                  route_fetcher=lambda url: route)
     p = c.plane_overhead()
-    assert isinstance(p, Plane) and p.callsign == "UAL415"
+    assert isinstance(p, Plane) and p.callsign == "BAW178"
+    assert p.route == "JFK > LHR"             # route lookup wired through the client
 
 
 def test_client_plane_none_on_fetch_error():

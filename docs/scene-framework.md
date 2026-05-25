@@ -38,7 +38,6 @@ class Context:
     profile: Profile           # DAY / EVENING / NIGHT
     sky: SkyData | None        # ISS pass + plane overhead snapshot
     space: SpaceData | None    # humans-in-space + EPIC earth frame
-    local: LocalData | None    # farmers market + neighborhood events
     health: list[str]          # active health warnings (empty = all well)
 ```
 
@@ -72,7 +71,7 @@ Priority bands (higher = more urgent):
 | 80  | **Full / new moon** | after sunset on the calendar day of the event |
 | 60  | **Sunrise / sunset** | once each, around the event |
 | 50  | **Weather rundown** | every 6 min (see cadence below) |
-| 40  | **Market / neighborhood event** | a few daytime plays when something's on |
+| 40  | **Farmers market** | a daytime nudge when a configured market is open today |
 | 30  | **Interjections** (humans in space, Earth from space) | rare, randomized |
 | 0   | **Trains** | the default; fills all remaining time |
 
@@ -107,8 +106,8 @@ loop.
 - **EVENING** — sunset until bedtime (~21:30).
 - **NIGHT** — bedtime until sunrise.
 
-The profile both gates slots (markets/events are daytime; the moon is night) and
-drives the **dimmer**, which scales the final frame's brightness so the panel
+The profile both gates slots (the market is a daytime thing; the moon is a night
+thing) and drives the **dimmer**, which scales the final frame's brightness so the panel
 isn't a nightlight-from-hell at 3am:
 
 - DAY → full configured brightness.

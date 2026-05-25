@@ -1,30 +1,68 @@
-"""Nearest airborne aircraft overhead, from OpenSky's anonymous API (no key).
+"""Nearest airborne aircraft overhead, from keyless community ADS-B feeds.
 
-We query a small box around the configured spot and pick the closest airborne
-craft above a sensible altitude floor. OpenSky's anonymous tier gives position,
-altitude, heading and callsign — but NOT the origin/destination route, so we
-never claim one. The state-vector layout is OpenSky's documented order; we read
-it by index and tolerate short or null-filled rows."""
+We query a community ADS-B aggregator for a small radius around the configured
+spot and pick the closest airborne craft above a sensible altitude floor. Three
+keyless feeds are tried in order so a single flaky host never blanks the sky:
+
+    adsb.fi  (primary)  -> {"aircraft": [...]}
+    adsb.lol (fallback) -> {"ac": [...]}
+    airplanes.live      -> {"ac": [...]}
+
+Each aircraft row carries the callsign, barometric altitude, ground track and
+position. Unlike OpenSky's anonymous tier these feeds don't include the flight's
+origin/destination, so we look the route up separately from hexdb.io (also
+keyless) and format it as IATA codes (e.g. ``"JFK > LHR"``). Every fetch degrades
+to None on any error; a missing route just leaves ``Plane.route`` as None."""
 from __future__ import annotations
 
 import json
 import math
-import urllib.parse
 import urllib.request
-from typing import Callable, List, Optional
+from typing import Callable, List, Optional, Tuple
 
 from . import Plane
 
-STATES_URL = "https://opensky-network.org/api/states/all"
+# Keyless ADS-B feeds, tried in order. Each returns aircraft under a different key.
+# ``dist`` is in nautical miles for all three.
+ADSB_SOURCES: Tuple[Tuple[str, str], ...] = (
+    ("https://opendata.adsb.fi/api/v2/lat/{lat}/lon/{lon}/dist/{nm}", "aircraft"),
+    ("https://api.adsb.lol/v2/lat/{lat}/lon/{lon}/dist/{nm}", "ac"),
+    ("https://api.airplanes.live/v2/point/{lat}/{lon}/{nm}", "ac"),
+)
 
-# OpenSky state-vector indices (https://openskynetwork.github.io/opensky-api/).
-_CALLSIGN, _LON, _LAT, _BARO_ALT = 1, 5, 6, 7
-_ON_GROUND, _VELOCITY, _TRACK, _GEO_ALT = 8, 9, 10, 13
+# Keyless route lookup: GET .../route/icao/<callsign> -> {"route": "KJFK-EGLL"}.
+ROUTE_URL = "https://hexdb.io/api/v1/route/icao/{callsign}"
 
-_M_TO_FT = 3.28084
-DEFAULT_BOX_DEG = 0.15             # +/- around the spot (~10 mi N-S, ~8 mi E-W at NYC)
+DEFAULT_RADIUS_NM = 12             # ~14 mi search radius around the spot
 DEFAULT_MIN_ALT_FT = 1000          # ignore aircraft on approach/departure on the deck
 COMPASS = ("N", "NE", "E", "SE", "S", "SW", "W", "NW")
+
+# A small built-in ICAO -> IATA map for busy airports, so the common routes
+# resolve offline without a per-airport network round-trip. Unknown codes fall
+# back to the ICAO with a leading "K" stripped (US-style), e.g. KBOS -> BOS.
+ICAO_TO_IATA = {
+    # New York / busy US hubs
+    "KJFK": "JFK", "KLGA": "LGA", "KEWR": "EWR", "KBOS": "BOS", "KDCA": "DCA",
+    "KIAD": "IAD", "KPHL": "PHL", "KORD": "ORD", "KMDW": "MDW", "KATL": "ATL",
+    "KLAX": "LAX", "KSFO": "SFO", "KSEA": "SEA", "KDFW": "DFW", "KDEN": "DEN",
+    "KMIA": "MIA", "KFLL": "FLL", "KMCO": "MCO", "KLAS": "LAS", "KPHX": "PHX",
+    "KIAH": "IAH", "KCLT": "CLT", "KDTW": "DTW", "KMSP": "MSP", "KBWI": "BWI",
+    "KSLC": "SLC", "KSAN": "SAN", "KTPA": "TPA", "KPDX": "PDX", "KAUS": "AUS",
+    # Canada / Mexico
+    "CYYZ": "YYZ", "CYUL": "YUL", "CYVR": "YVR", "MMMX": "MEX",
+    # Europe
+    "EGLL": "LHR", "EGKK": "LGW", "EGGW": "LTN", "EGSS": "STN", "EGLC": "LCY",
+    "LFPG": "CDG", "LFPO": "ORY", "EHAM": "AMS", "EDDF": "FRA", "EDDM": "MUC",
+    "LEMD": "MAD", "LEBL": "BCN", "LIRF": "FCO", "LIMC": "MXP", "LSZH": "ZRH",
+    "EIDW": "DUB", "LPPT": "LIS", "EKCH": "CPH", "ESSA": "ARN", "ENGM": "OSL",
+    "LTFM": "IST", "LOWW": "VIE", "EDDB": "BER", "LFLL": "LYS",
+    # Middle East / Asia / Pacific
+    "OMDB": "DXB", "OTHH": "DOH", "OMAA": "AUH", "VHHH": "HKG", "RJTT": "HND",
+    "RJAA": "NRT", "RKSI": "ICN", "ZBAA": "PEK", "ZSPD": "PVG", "WSSS": "SIN",
+    "VIDP": "DEL", "VABB": "BOM", "YSSY": "SYD", "YMML": "MEL", "NZAA": "AKL",
+    # Latin America
+    "SBGR": "GRU", "SAEZ": "EZE", "SKBO": "BOG", "MPTO": "PTY",
+}
 
 
 def _default_fetch(url: str) -> dict:
@@ -37,71 +75,145 @@ def _heading_to_compass(deg: float) -> str:
     return COMPASS[int((deg % 360) / 45 + 0.5) % 8]
 
 
-def states_url(lat: float, lon: float, box_deg: float = DEFAULT_BOX_DEG) -> str:
-    q = urllib.parse.urlencode({
-        "lamin": round(lat - box_deg, 4), "lomin": round(lon - box_deg, 4),
-        "lamax": round(lat + box_deg, 4), "lomax": round(lon + box_deg, 4),
-    })
-    return f"{STATES_URL}?{q}"
+def icao_to_iata(icao: str) -> str:
+    """Best-effort IATA code for an ICAO airport code, using a built-in map.
+
+    Falls back to stripping a leading "K" for US-style four-letter codes
+    (KBOS -> BOS); other unknown codes are returned unchanged."""
+    code = (icao or "").strip().upper()
+    if code in ICAO_TO_IATA:
+        return ICAO_TO_IATA[code]
+    if len(code) == 4 and code.startswith("K"):
+        return code[1:]
+    return code
 
 
-def _row_to_plane(s: list, lat: float, lon: float, min_alt_ft: float):
-    """(distance_deg, Plane) for a usable airborne row, else None."""
+def format_route(route: Optional[str]) -> Optional[str]:
+    """Turn a hexdb ``ORIGIN-DEST`` (or multi-leg ``A-B-C``) ICAO route into a
+    short ``IATA > IATA`` label (origin and final destination), or None.
+
+    The spleen font has no right-arrow glyph (U+2192), so we use ``>`` — it
+    renders and reads clearly at this size."""
+    if not route:
+        return None
+    legs = [seg.strip() for seg in route.split("-") if seg.strip()]
+    if len(legs) < 2:
+        return None
+    origin, dest = icao_to_iata(legs[0]), icao_to_iata(legs[-1])
+    if not origin or not dest:
+        return None
+    return f"{origin} > {dest}"
+
+
+def adsb_url(template: str, lat: float, lon: float, radius_nm: int) -> str:
+    return template.format(lat=round(lat, 5), lon=round(lon, 5), nm=int(radius_nm))
+
+
+def _aircraft_list(data: dict, key: str) -> list:
+    """The aircraft array from a feed response. Tolerates either feed's key."""
+    if not isinstance(data, dict):
+        return []
+    rows = data.get(key)
+    if rows is None:                                # accept the other feed's key too
+        rows = data.get("aircraft") or data.get("ac")
+    return rows if isinstance(rows, list) else []
+
+
+def _row_to_plane(a: dict, lat: float, lon: float, min_alt_ft: float):
+    """(distance_deg, Plane) for a usable airborne row, else None.
+
+    Skips on-ground craft (``alt_baro == "ground"``), rows missing a position or
+    altitude, and anything below the altitude floor."""
     try:
-        if len(s) <= _GEO_ALT:
+        if not isinstance(a, dict):
             return None
-        if s[_ON_GROUND]:
+        alt = a.get("alt_baro")
+        if alt == "ground":                         # explicitly on the deck
             return None
-        plon, plat = s[_LON], s[_LAT]
-        if plon is None or plat is None:
+        if not isinstance(alt, (int, float)):       # null / missing / non-numeric
             return None
-        alt_m = s[_GEO_ALT] if s[_GEO_ALT] is not None else s[_BARO_ALT]
-        if alt_m is None:
-            return None
-        alt_ft = alt_m * _M_TO_FT
+        alt_ft = float(alt)
         if alt_ft < min_alt_ft:
             return None
-        heading = s[_TRACK] if s[_TRACK] is not None else 0.0
-        callsign = (s[_CALLSIGN] or "").strip() or "UNKNOWN"
+        plat, plon = a.get("lat"), a.get("lon")
+        if not isinstance(plat, (int, float)) or not isinstance(plon, (int, float)):
+            return None
+        track = a.get("track")
+        if not isinstance(track, (int, float)):
+            track = a.get("true_heading")
+        heading = float(track) if isinstance(track, (int, float)) else 0.0
+        callsign = (a.get("flight") or "").strip() or "UNKNOWN"
         # planar distance in degrees, longitude scaled by latitude
         dlat = plat - lat
         dlon = (plon - lon) * math.cos(math.radians(lat))
         dist = math.hypot(dlat, dlon)
         plane = Plane(callsign=callsign, alt_ft=int(round(alt_ft)),
-                      heading_deg=float(heading), dir=_heading_to_compass(heading))
+                      heading_deg=heading, dir=_heading_to_compass(heading))
         return dist, plane
-    except (TypeError, IndexError, ValueError):
+    except (TypeError, ValueError):
         return None
 
 
-def parse_states(data: dict, lat: float, lon: float,
-                 min_alt_ft: float = DEFAULT_MIN_ALT_FT) -> List[Plane]:
-    """All usable airborne aircraft in the response, nearest first."""
-    states = (data or {}).get("states") or []
+def parse_aircraft(data: dict, lat: float, lon: float, key: str = "aircraft",
+                   min_alt_ft: float = DEFAULT_MIN_ALT_FT) -> List[Plane]:
+    """All usable airborne aircraft in a feed response, nearest first."""
     found = []
-    for s in states:
-        if not isinstance(s, (list, tuple)):
-            continue
-        hit = _row_to_plane(s, lat, lon, min_alt_ft)
+    for a in _aircraft_list(data, key):
+        hit = _row_to_plane(a, lat, lon, min_alt_ft)
         if hit is not None:
             found.append(hit)
     found.sort(key=lambda dp: dp[0])
     return [p for _d, p in found]
 
 
-def nearest_plane(data: dict, lat: float, lon: float,
+def nearest_plane(data: dict, lat: float, lon: float, key: str = "aircraft",
                   min_alt_ft: float = DEFAULT_MIN_ALT_FT) -> Optional[Plane]:
-    """The closest airborne aircraft above the floor, or None."""
-    planes = parse_states(data, lat, lon, min_alt_ft)
+    """The closest airborne aircraft above the floor in one response, or None."""
+    planes = parse_aircraft(data, lat, lon, key, min_alt_ft)
     return planes[0] if planes else None
 
 
-def fetch_overhead(lat: float, lon: float, box_deg: float = DEFAULT_BOX_DEG,
-                   min_alt_ft: float = DEFAULT_MIN_ALT_FT,
-                   fetcher: Callable[[str], dict] = _default_fetch) -> Optional[Plane]:
-    """Query OpenSky for the box and return the nearest plane (or None on any error)."""
+def lookup_route(callsign: str,
+                 fetcher: Callable[[str], dict] = _default_fetch) -> Optional[str]:
+    """Formatted ``IATA > IATA`` route for a callsign via hexdb.io, or None.
+
+    Returns None on any error or when no route is on file (hexdb 404s with an
+    ``error`` field, which has no usable ``route``)."""
+    callsign = (callsign or "").strip()
+    if not callsign or callsign == "UNKNOWN":
+        return None
     try:
-        data = fetcher(states_url(lat, lon, box_deg))
+        data = fetcher(ROUTE_URL.format(callsign=callsign))
     except Exception:
         return None
-    return nearest_plane(data, lat, lon, min_alt_ft)
+    if not isinstance(data, dict):
+        return None
+    return format_route(data.get("route"))
+
+
+def fetch_overhead(lat: float, lon: float, radius_nm: int = DEFAULT_RADIUS_NM,
+                   min_alt_ft: float = DEFAULT_MIN_ALT_FT,
+                   fetcher: Callable[[str], dict] = _default_fetch,
+                   route_fetcher: Callable[[str], dict] = _default_fetch) -> Optional[Plane]:
+    """Nearest airborne plane over the spot, with its route when known, or None.
+
+    Tries each ADS-B feed in turn (adsb.fi, then adsb.lol, then airplanes.live);
+    the first that yields a usable aircraft wins. Any feed error is swallowed and
+    the next is tried; if none yield a plane we return None. The route lookup is
+    best-effort — a failure there just leaves ``route=None``."""
+    plane: Optional[Plane] = None
+    for template, key in ADSB_SOURCES:
+        try:
+            data = fetcher(adsb_url(template, lat, lon, radius_nm))
+        except Exception:
+            continue
+        plane = nearest_plane(data, lat, lon, key, min_alt_ft)
+        if plane is not None:
+            break
+    if plane is None:
+        return None
+    route = lookup_route(plane.callsign, route_fetcher)
+    if route is not None:
+        plane = Plane(callsign=plane.callsign, alt_ft=plane.alt_ft,
+                      heading_deg=plane.heading_deg, dir=plane.dir, route=route)
+    return plane

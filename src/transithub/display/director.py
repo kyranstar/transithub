@@ -26,7 +26,6 @@ class Context:
     weather: Any = None
     sky: Any = None          # ISS pass + plane overhead snapshot
     space: Any = None        # humans-in-space + Earth-from-space
-    local: Any = None        # farmers market + neighborhood events
     health: tuple = ()       # active warning strings; empty == all well
 
 

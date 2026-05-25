@@ -12,8 +12,8 @@ neighborhood — on a Raspberry Pi LED matrix, styled like a real MTA sign.**
 
 TransitHub drives an Adafruit-bonnet 64×32 RGB LED panel as a real-time subway sign, then
 quietly rotates in everything else worth a glance — animated weather, the ISS passing
-overhead, a full moon, a farmers market open today — all from free, **keyless** APIs
-(Open-Meteo, the MTA feeds, NASA EPIC, OpenSky, NYC Open Data). One thing on screen at a
+overhead, a full moon, a farmers market open today — all from free, **keyless** sources
+(Open-Meteo, the MTA feeds, NASA, Celestrak, community ADS-B). One thing on screen at a
 time; the trains are always the backbone.
 
 <p align="center">
@@ -37,14 +37,15 @@ or it's muggy — plus sunrise/sunset notices and a `TRASH TMRW` reminder.
 
 ### 🛰 Sky & space
 The ISS gets a heads-up minutes before it crosses (**`ISS PASS · 8:43 · LOOK NW`**, computed
-locally from a keyless TLE); a plane overhead gets an **`ABOVE YOU`** (OpenSky); the full and
-new moon get a brief salute on the night they fall; and now and then — how many **humans are
-in space**, or a fresh photo of **Earth from NASA's EPIC camera**.
+locally from a keyless TLE); a plane overhead gets an **`ABOVE YOU · JFK > LHR`** (community
+ADS-B + route lookup); the full and new moon get a brief salute on the night they fall; and now
+and then — how many **humans are in space**, or a real photo of **Earth from NASA's EPIC
+camera**.
 
 ### 🌳 Your block
-A farmers market open **today** near home (**`MARKET TODAY · UNION SQ · UNTIL 6`**) and free,
-outdoor events tonight or tomorrow (**`PARK MOVIE · 8 PM · TOMPKINS`**) — filtered to within a
-few km of you, from NYC Open Data.
+A farmers market open **today** near home — **`MARKET TODAY · MARIA HERNANDEZ · UNTIL 3`** —
+from a short list you keep in config (name, weekday, season), so it's always right and needs no
+key or scraping.
 
 ### 🌙 Calm by design, dim by night
 One idea per screen on a priority + cooldown schedule, so nothing dominates and the trains
@@ -130,9 +131,9 @@ python scripts/find_station.py "dekalb"
 ```
 
 `config.example.yaml` also covers your `location`, `weather`, **`night`** dimming (bedtime +
-how dim it gets), the **`sky`/`space`/`local`** ambient toggles (`local.radius_km` keeps
-markets and events near home), `notifications`/`trash`, and the `matrix`/`display`/`alerts`
-tuning knobs — every source stays keyless.
+how dim it gets), the **`sky`/`space`/`local`** ambient toggles (`local.markets` is your
+short curated list of nearby markets), `notifications`/`trash`, and the
+`matrix`/`display`/`alerts` tuning knobs — every source stays keyless.
 
 ## Develop & preview (no hardware)
 
@@ -192,10 +193,10 @@ parsing) · [python-sgp4](https://github.com/brandon-rhodes/python-sgp4) (ISS or
 
 **Data, all keyless:** [Open-Meteo](https://open-meteo.com) (weather) ·
 [MTA open data](https://www.mta.info/developers) · [Celestrak](https://celestrak.org) (ISS
-TLE) · [OpenSky Network](https://opensky-network.org) (aircraft) ·
+TLE) · [adsb.fi](https://adsb.fi) / [adsb.lol](https://adsb.lol) (aircraft) ·
+[hexdb.io](https://hexdb.io) (flight routes) ·
 [NASA EPIC](https://epic.gsfc.nasa.gov) (Earth imagery) ·
-[Open Notify](http://open-notify.org) (people in space) ·
-[NYC Open Data](https://opendata.cityofnewyork.us) (markets & events)
+[Open Notify](http://open-notify.org) (people in space)
 
 ## License
 

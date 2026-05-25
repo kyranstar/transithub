@@ -4,10 +4,10 @@ One idea per screen, each a brief takeover that gets out of the way:
 
 * ``FullMoonScene`` / ``NewMoonScene`` — a once-a-night salute on the calendar
   day of the full or new moon, after sunset.
-* ``IssPassScene`` — a heads-up ("LOOK NW") as a pass approaches, then an
-  "ABOVE YOU" arc while the station is up.
-* ``PlaneOverheadScene`` — a little airliner gliding across with its callsign,
-  heading and altitude (no route — OpenSky doesn't give us one).
+* ``IssPassScene`` — a heads-up ("ISS PASS" / time / "LOOK NW") as a pass
+  approaches, then an "ABOVE YOU" arc while the station is up.
+* ``PlaneOverheadScene`` — a little airliner gliding across "ABOVE YOU" with its
+  route (e.g. "JFK > LHR") when known, else its callsign, plus heading/altitude.
 
 All the moon/orbit/plane drawing lives here; only the small shared primitives
 (text, stars, gradients, the moon disc) are reused from ``scenery``."""
@@ -103,9 +103,10 @@ class NewMoonScene(Scene):
 class IssPassScene(Scene):
     """A satellite tracing a bright arc across the sky.
 
-    ``heads_up`` shows the time and "LOOK <dir>"; ``overhead`` shows "ABOVE YOU"
-    while the station is actually up. The dot rides a shallow arc with a fading
-    trail; a faint orbit ring frames it."""
+    ``heads_up`` says "ISS PASS" / time / "LOOK <dir>" before a pass; ``overhead``
+    says "ISS" / "ABOVE YOU" while the station is actually up. The dot rides a
+    shallow arc with a fading trail; a faint orbit ring frames it. The heads-up
+    needs a third text line, so its motif is raised and flattened to make room."""
     duration_ms = 8000
 
     def __init__(self, iss: IssPass, now: datetime, mode: str = "heads_up",
@@ -114,11 +115,17 @@ class IssPassScene(Scene):
         self.now = now
         self.mode = mode
         self.cols, self.rows = cols, rows
+        # The heads-up carries three text lines, so lift and flatten the orbit
+        # motif into the top rows; the overhead has two lines and more headroom.
+        if mode == "heads_up":
+            self._orbit_cy, self._orbit_ry, self._arc_base, self._arc_amp = 4, 3, 6, 4
+        else:
+            self._orbit_cy, self._orbit_ry, self._arc_base, self._arc_amp = 11, 8, 14, 8
 
     def _arc_point(self, t: float):
         """Position along a shallow left-to-right arc, t in [0, 1]."""
         x = 4 + t * (self.cols - 8)
-        y = 14 - math.sin(math.pi * t) * 8          # peaks near the top middle
+        y = self._arc_base - math.sin(math.pi * t) * self._arc_amp
         return x, y
 
     def render(self, elapsed_ms: int) -> Image.Image:
@@ -128,7 +135,7 @@ class IssPassScene(Scene):
         # faint orbit ring: a flat ellipse hint framing the arc
         for deg in range(0, 360, 8):
             ex = self.cols / 2 + 24 * math.cos(math.radians(deg))
-            ey = 11 + 8 * math.sin(math.radians(deg))
+            ey = self._orbit_cy + self._orbit_ry * math.sin(math.radians(deg))
             xi, yi = int(ex), int(ey)
             if 0 <= xi < self.cols and 0 <= yi < self.rows:
                 px[xi, yi] = S.lerp(px[xi, yi], (40, 52, 80), 0.5)
@@ -150,7 +157,9 @@ class IssPassScene(Scene):
             _centered(img, self.rows - 17, "ISS", (200, 220, 255))
             _centered(img, self.rows - 8, "ABOVE YOU", (255, 250, 230))
         else:
-            _centered(img, self.rows - 17, _ny_clock(self.iss.start), (210, 224, 255))
+            # Three short centered lines: say it's the ISS, when, and where to look.
+            _centered(img, 8, "ISS PASS", (200, 220, 255))
+            _centered(img, 16, _ny_clock(self.iss.start), (210, 224, 255))
             _centered(img, self.rows - 8, f"LOOK {self.iss.rise_dir}", (255, 250, 230))
         return img
 
@@ -180,10 +189,10 @@ class PlaneOverheadScene(Scene):
         img = Image.new("RGB", (self.cols, self.rows), (0, 0, 0))
         S.gradient(img, [(0.0, (24, 40, 78)), (0.55, (60, 96, 150)), (1.0, (120, 150, 190))])
         px = img.load()
-        # the plane crosses left -> right along the top third
+        # the plane glides left -> right high up, clear of the text block below
         prog = (frame % 50) / 50.0
         nose_x = int(8 + prog * (self.cols))
-        y = 7
+        y = 4
         # contrail behind the nose
         for k in range(1, 16):
             tx = nose_x - 8 - k
@@ -192,9 +201,15 @@ class PlaneOverheadScene(Scene):
                 px[tx, y] = S.lerp(px[tx, y], (235, 240, 250), a)
         self._draw_plane(img, nose_x, y, (245, 248, 255))
 
-        _centered(img, self.rows - 17, self.plane.callsign, (255, 255, 255))
-        line = f"{self.plane.dir} {self.plane.alt_ft}FT"
-        _centered(img, self.rows - 8, line, (210, 226, 250))
+        # One clear idea: this plane is passing over you. Headline, then the
+        # route (origin -> destination) when known, else the callsign; a small
+        # heading/altitude line underneath when it fits.
+        _centered(img, 10, "ABOVE YOU", (255, 255, 255))
+        ident = self.plane.route or self.plane.callsign
+        _centered(img, 17, ident, (255, 224, 120) if self.plane.route else (235, 240, 250))
+        detail = f"{self.plane.dir} {self.plane.alt_ft}FT"
+        if S.text_width(detail) <= self.cols:
+            _centered(img, 24, detail, (190, 208, 236))
         return img
 
 

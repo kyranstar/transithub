@@ -1,10 +1,10 @@
 """Sky events: the moon, the ISS overhead, and the plane passing above you.
 
 All keyless. The moon is computed locally (no network). The ISS pass is computed
-locally with SGP4 from a keyless Celestrak TLE; planes come from OpenSky's
-anonymous endpoint. The pieces here are the data shapes and the client that
-fills them; the scenes and sources that *show* them live in
-``display/scenes/sky.py``."""
+locally with SGP4 from a keyless Celestrak TLE; planes come from keyless
+community ADS-B feeds, with the flight route looked up from keyless hexdb.io. The
+pieces here are the data shapes and the client that fills them; the scenes and
+sources that *show* them live in ``display/scenes/sky.py``."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -31,12 +31,14 @@ class IssPass:
 class Plane:
     """The nearest airborne aircraft currently over you.
 
-    Route (origin -> destination) is NOT available from OpenSky's anonymous API,
-    so it is deliberately absent — we never fabricate it."""
+    ``route`` is the flight's origin -> destination as a short IATA label (e.g.
+    ``"JFK > LHR"``), looked up by callsign from keyless hexdb.io. It is None when
+    no route is on file — we never fabricate one."""
     callsign: str
     alt_ft: int
     heading_deg: float
     dir: str                 # compass point the plane is heading toward
+    route: Optional[str] = None   # e.g. "JFK > LHR"; None when unknown
 
 
 @dataclass(frozen=True)

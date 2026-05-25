@@ -81,8 +81,8 @@ class SpaceConfig:
 
 @dataclass
 class LocalConfig:
-    enabled: bool = True     # nearby farmers markets + free outdoor events
-    radius_km: float = 4.0   # only show happenings within this distance of home
+    enabled: bool = True                    # show a nearby farmers market open today
+    markets: List[dict] = field(default_factory=list)   # curated; see config.example.yaml
 
 
 @dataclass

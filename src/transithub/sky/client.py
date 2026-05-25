@@ -12,7 +12,7 @@ from typing import Callable, Optional
 from . import IssPass, Plane
 from .iss import TLE_URL, next_pass
 from .iss import _default_fetch as _default_text_fetch
-from .planes import DEFAULT_BOX_DEG, DEFAULT_MIN_ALT_FT
+from .planes import DEFAULT_MIN_ALT_FT, DEFAULT_RADIUS_NM
 from .planes import _default_fetch as _default_json_fetch
 from .planes import fetch_overhead
 
@@ -25,19 +25,22 @@ _PASS_LOOKAHEAD_H = 6.0         # search this far ahead for the next pass
 
 class SkyClient:
     """Computes the next ISS pass (locally, from a cached TLE) and the nearest
-    plane overhead (from OpenSky). Fetchers are injectable for offline tests."""
+    plane overhead (from keyless community ADS-B feeds, with a hexdb.io route
+    lookup). Fetchers are injectable for offline tests."""
 
     def __init__(self, lat: float, lon: float,
                  tle_fetcher: Callable[[str], str] = _default_text_fetch,
                  states_fetcher: Callable[[str], dict] = _default_json_fetch,
-                 box_deg: float = DEFAULT_BOX_DEG,
+                 route_fetcher: Callable[[str], dict] = _default_json_fetch,
+                 radius_nm: int = DEFAULT_RADIUS_NM,
                  min_alt_ft: float = DEFAULT_MIN_ALT_FT,
                  clock: Callable[[], float] = time.monotonic):
         self.lat = lat
         self.lon = lon
         self._fetch_tle = tle_fetcher
         self._fetch_states = states_fetcher
-        self.box_deg = box_deg
+        self._fetch_route = route_fetcher
+        self.radius_nm = radius_nm
         self.min_alt_ft = min_alt_ft
         self._clock = clock
         self._tle_text: Optional[str] = None
@@ -65,6 +68,7 @@ class SkyClient:
         return next_pass(tle, self.lat, self.lon, hours=_PASS_LOOKAHEAD_H)
 
     def plane_overhead(self) -> Optional[Plane]:
-        """Nearest airborne aircraft in the box right now, or None."""
-        return fetch_overhead(self.lat, self.lon, self.box_deg, self.min_alt_ft,
-                              fetcher=self._fetch_states)
+        """Nearest airborne aircraft within the search radius right now, or None."""
+        return fetch_overhead(self.lat, self.lon, self.radius_nm, self.min_alt_ft,
+                              fetcher=self._fetch_states,
+                              route_fetcher=self._fetch_route)

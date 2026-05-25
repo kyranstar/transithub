@@ -54,8 +54,12 @@ sky:
 space:
   enabled: true              # "N humans in space" fact + a NASA EPIC photo of Earth
 local:
-  enabled: true              # nearby farmers markets + free outdoor events
-  radius_km: 4               # only show happenings within this distance of home
+  enabled: true              # show a nearby farmers market that's open today
+  markets:                   # your local market(s) — edit/add your own
+    - name: "MARIA HERNANDEZ"
+      day: "saturday"        # the weekday it runs
+      season: ["2026-05-23", "2026-11-22"]   # inclusive [start, end]; omit for year-round
+      until: "3"             # closing hour -> shows "UNTIL 3"
 
 trash:
   days: ["monday"]           # TRASH TMRW shows 3pm–midnight the day before each

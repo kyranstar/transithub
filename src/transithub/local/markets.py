@@ -1,41 +1,31 @@
-"""Nearest farmers market that's open *today*, from NYC Open Data.
+"""The curated farmers market that's open *today*, straight from config.
 
-Dataset: "DOHMH Farmers Markets" — Socrata resource ``8vwk-6iz2`` on
-``data.cityofnewyork.us``. Each row has a name, lat/lon, free-text day(s) of
-operation, free-text hours, and an ``open_year_round`` flag. There is no explicit
-season window, so we apply one conservative rule (below) and otherwise show
-nothing rather than guess.
+NYC has no keyless, current, coordinate-tagged market feed worth trusting, so
+this feature is config-driven instead of networked. The owner lists their
+market(s) in YAML with an exact weekday and season window; we surface the one
+that's open today and nothing else.
 
-The free-text schedule fields are messy (separators ``& , ; \\n``, ranges like
-``Mon-Sat``, typos like ``Tusday``/``Wedneday``, hours like ``9a.m. - 2 p.m.``
-or ``noon - 3 p.m.``). We parse defensively and only surface a market when we can
-pin BOTH that today's weekday is in its schedule AND a closing time."""
+A config entry looks like::
+
+    {"name": "MARIA HERNANDEZ", "day": "saturday",
+     "season": ["2026-05-23", "2026-11-22"], "until": "3"}
+
+``season`` is an inclusive ``[start, end]`` ISO-date pair; omit it for a market
+that runs year-round. ``day`` is case-insensitive. ``until`` is the bare close
+label the panel renders as "UNTIL 3". Parsing is tolerant: a bad/empty entry is
+skipped rather than crashing the sign."""
 from __future__ import annotations
 
-import json
-import math
 import re
-import urllib.parse
-import urllib.request
 from dataclasses import dataclass
-from typing import Callable, Optional
+from datetime import date, datetime
+from typing import List, Optional
 
-from ..clock import now as now_eastern
-from .events import short_place
-
-RESOURCE = "8vwk-6iz2"
-BASE_URL = f"https://data.cityofnewyork.us/resource/{RESOURCE}.json"
-
-# Seasonal (not year-round) outdoor greenmarkets in NYC run, conservatively,
-# May through November. With no per-market season dates published, this is the
-# one assumption we make; outside it, seasonal markets are treated as closed.
-SEASON_MONTHS = frozenset(range(5, 12))   # May (5) .. November (11)
-
-# Map every weekday spelling we expect (incl. common dataset typos) to Mon=0..Sun=6.
+# Weekday name -> Mon=0..Sun=6 (lower-cased; common short forms accepted too).
 _WEEKDAYS = {
     "monday": 0, "mon": 0,
-    "tuesday": 1, "tue": 1, "tues": 1, "tusday": 1,            # 'Tusday' typo
-    "wednesday": 2, "wed": 2, "weds": 2, "wedneday": 2,        # 'Wedneday' typo
+    "tuesday": 1, "tue": 1, "tues": 1,
+    "wednesday": 2, "wed": 2, "weds": 2,
     "thursday": 3, "thu": 3, "thur": 3, "thurs": 3,
     "friday": 4, "fri": 4,
     "saturday": 5, "sat": 5,
@@ -45,166 +35,124 @@ _WEEKDAYS = {
 
 @dataclass(frozen=True)
 class Market:
-    """A market that is open today, ready for the screen."""
-    name: str          # display name, already shortened/upper-cased for the panel
-    close_label: str   # e.g. "UNTIL 6" or "UNTIL 2:30"
-    dist_km: float
+    """A market open today, shaped for the screen.
+
+    ``name`` is the display name (fit to the panel by the scene). ``until`` is the
+    bare close label, rendered as "UNTIL <until>" (e.g. "3" -> "UNTIL 3")."""
+    name: str
+    until: str
 
 
-def _default_fetch(url: str) -> list:
-    req = urllib.request.Request(url, headers={"User-Agent": "transithub"})
-    with urllib.request.urlopen(req, timeout=15) as resp:
-        return json.loads(resp.read().decode("utf-8"))
+@dataclass(frozen=True)
+class MarketSpec:
+    """One parsed config entry: which weekday it runs and its season window.
+
+    ``season_start``/``season_end`` are inclusive bounds, or None for a market
+    that's always in season."""
+    name: str
+    weekday: int                       # Mon=0..Sun=6
+    until: str
+    season_start: Optional[date] = None
+    season_end: Optional[date] = None
+
+    def open_on(self, day: date, weekday: int) -> bool:
+        """True when this market runs on ``weekday`` and ``day`` is in season."""
+        if weekday != self.weekday:
+            return False
+        if self.season_start is not None and day < self.season_start:
+            return False
+        if self.season_end is not None and day > self.season_end:
+            return False
+        return True
 
 
-def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    p = math.pi / 180
-    a = (0.5 - math.cos((lat2 - lat1) * p) / 2
-         + math.cos(lat1 * p) * math.cos(lat2 * p) * (1 - math.cos((lon2 - lon1) * p)) / 2)
-    return 2 * 6371 * math.asin(math.sqrt(a))
-
-
-def weekdays_of(text: str) -> set:
-    """The set of weekday indices (Mon=0..Sun=6) a free-text schedule covers.
-
-    Handles word lists with any of ``& , ; / \\n`` or the word "and" between
-    them, simple ranges like ``Mon-Sat``/``Tuesday-Friday``, parentheticals like
-    ``(starting 5/5)``, and the dataset's recurring typos. Unknown/``TBD`` -> {}.
-    """
-    if not text:
-        return set()
-    low = text.lower()
-    # Ranges first: "<day> - <day>" => inclusive span (only when both ends are days).
-    out: set = set()
-    for a, b in re.findall(r"([a-z]+)\s*-\s*([a-z]+)", low):
-        if a in _WEEKDAYS and b in _WEEKDAYS:
-            lo, hi = sorted((_WEEKDAYS[a], _WEEKDAYS[b]))
-            out.update(range(lo, hi + 1))
-    # Then any individual weekday words anywhere in the string.
-    for word in re.findall(r"[a-z]+", low):
-        if word in _WEEKDAYS:
-            out.add(_WEEKDAYS[word])
-    return out
-
-
-# A clock time ("9", "9:30", "9a.m.", "2 p.m.") or the bare word "noon".
-_TIME_RE = re.compile(r"(?:(\d{1,2})(?::(\d{2}))?\s*(a\.?m\.?|p\.?m\.?))|(noon)", re.I)
-
-
-def _close_token(segment: str) -> Optional[str]:
-    """The closing-time label from one schedule segment, or None.
-
-    A segment like ``9 a.m. - 3 p.m.`` has its close as the last time token. We
-    keep "UNTIL 3" for an afternoon close and tack on "AM" when a market closes in
-    the morning so it's never ambiguous."""
-    matches = list(_TIME_RE.finditer(segment))
-    if len(matches) < 2:           # need an open AND a close to trust it
+def _parse_date(value) -> Optional[date]:
+    """An ISO date from a string/date, or None if it can't be read."""
+    if isinstance(value, date) and not isinstance(value, datetime):
+        return value
+    if isinstance(value, datetime):
+        return value.date()
+    try:
+        return date.fromisoformat(str(value).strip())
+    except (TypeError, ValueError):
         return None
-    h, m, ap, noon = matches[-1].groups()
-    if noon:
-        return "UNTIL NOON"
-    ap = ap.lower().replace(".", "")
-    label = h if not m else f"{h}:{m}"
-    if ap == "am":                 # morning close is unusual -> mark it
-        return f"UNTIL {label}AM"
-    return f"UNTIL {label}"
 
 
-def parse_close_label(hours: str) -> Optional[str]:
-    """A single "UNTIL <time>" close label from free-text hours, or None.
+def _parse_season(season) -> tuple[Optional[date], Optional[date]]:
+    """An inclusive ``(start, end)`` pair from a config ``season`` value.
 
-    Multi-segment strings (``... (W); ... (SU)``) are split on ``;`` and the
-    first parseable segment's close is used; in this dataset the segments share a
-    close time, so this stays accurate and we avoid promising a day-specific close
-    we can't reliably attribute."""
-    if not hours:
-        return None
-    for segment in re.split(r"[;]", hours):
-        label = _close_token(segment)
-        if label is not None:
-            return label
-    return _close_token(hours)
+    Accepts a ``[start, end]`` pair (either side may be blank/None for open-ended)
+    or a missing value (always in season). Unparseable bounds become None."""
+    if not season:
+        return (None, None)
+    if isinstance(season, (list, tuple)):
+        start = _parse_date(season[0]) if len(season) >= 1 else None
+        end = _parse_date(season[1]) if len(season) >= 2 else None
+        return (start, end)
+    return (None, None)
 
 
-# Drop the operator prefix so the panel shows the *place*: "RiseBoro Farmers
-# Markets at Maria Hernandez" -> "HERNANDEZ"; "McCarren Park Greenmarket" ->
-# "MCCARREN". `short_place` then abbreviates/fits it to the panel.
-_AT_SPLIT = re.compile(r"\s+at\s+", re.I)
-_DROP_WORDS = re.compile(r"\b(greenmarket|farmers?|markets?|farmstand)\b", re.I)
+def parse_specs(entries) -> List[MarketSpec]:
+    """Parse a list of plain config dicts into ``MarketSpec``s.
+
+    Each entry needs a recognizable ``day`` and a ``name``; a ``season`` is
+    optional (always in season without one). Entries we can't parse are skipped,
+    so one bad line never takes the feature down."""
+    specs: List[MarketSpec] = []
+    for entry in entries or []:
+        if not isinstance(entry, dict):
+            continue
+        day = str(entry.get("day", "")).strip().lower()
+        weekday = _WEEKDAYS.get(day)
+        if weekday is None:
+            continue
+        name = str(entry.get("name", "")).strip()
+        if not name:
+            continue
+        until = str(entry.get("until", "")).strip()
+        start, end = _parse_season(entry.get("season"))
+        specs.append(MarketSpec(name=name, weekday=weekday, until=until,
+                                season_start=start, season_end=end))
+    return specs
 
 
-def _display_name(name: str) -> str:
-    base = _AT_SPLIT.split(name)[-1]          # keep the part after "... at ..."
-    base = _DROP_WORDS.sub("", base)
-    base = re.sub(r"\s+", " ", base).strip(" -,").strip()
-    return short_place(base or name)
+def market_today(specs: List[MarketSpec], now: datetime) -> Optional[Market]:
+    """The configured market open *today*, or None.
+
+    "Today" means ``now``'s weekday matches the spec's day AND ``now.date()`` is
+    within ``[season_start, season_end]`` inclusive. If several specs match, the
+    first one wins."""
+    today = now.date()
+    weekday = now.weekday()
+    for spec in specs:
+        if spec.open_on(today, weekday):
+            return Market(name=spec.name, until=spec.until)
+    return None
 
 
-class MarketsClient:
-    """Finds the single nearest market open today within ``radius_km`` of home.
+# --- panel-fit place label -------------------------------------------------
+# Compact place labels for the 64px panel: drop the bit after ":"/"(",
+# abbreviate "Square" -> "SQ", and strip generic suffixes so the distinctive
+# name shows. (Lives here because the market scene is the only remaining caller.)
+_VENUE_TRIM = re.compile(r"\s*[:(].*$")          # drop "Park: Bandshell" / "(...)"
+_VENUE_DROP = re.compile(
+    r"\b(park|playground|ballfields?|greenmarket|field|garden|center|plaza)\b", re.I)
+_SQUARE = re.compile(r"\bsquare\b", re.I)
+_PLACE_MAX_PX = 62               # must fit the 64px panel with a 1px margin
 
-    Conservative by design: a market is only returned when today's weekday is in
-    its parsed schedule, it is in season (year-round, or a seasonal market during
-    the May-Nov window), and a closing time parses. Anything we can't pin is
-    dropped, so we never invite someone to a market that isn't there."""
-    name = "markets"
 
-    def __init__(self, latitude: float, longitude: float, radius_km: float = 4.0,
-                 fetcher: Callable[[str], list] = _default_fetch,
-                 now: Callable[[], "object"] = now_eastern):
-        self.lat = latitude
-        self.lon = longitude
-        self.radius_km = radius_km
-        self._fetch = fetcher
-        self._now = now
+def short_place(name: str) -> str:
+    """A panel-ready place label: ``"Tompkins Square Park"`` -> ``"TOMPKINS SQ"``.
 
-    def _url(self) -> str:
-        # Pull a generous Brooklyn-area page; we filter precisely in Python.
-        q = urllib.parse.urlencode({"$limit": 2000, "$order": "year DESC"})
-        return f"{BASE_URL}?{q}"
-
-    def _in_season(self, row: dict, month: int) -> bool:
-        flag = str(row.get("open_year_round") or "").strip().lower()
-        if flag.startswith("yes"):
-            return True
-        return month in SEASON_MONTHS
-
-    def best(self) -> Optional[Market]:
-        try:
-            rows = self._fetch(self._url())
-        except Exception:
-            return None
-        if not isinstance(rows, list) or not rows:
-            return None
-
-        now = self._now()
-        today = now.weekday()
-        month = now.month
-
-        # Only consider the most recent year present (the feed lags a season or two).
-        years = [str(r.get("year")) for r in rows if r.get("year")]
-        latest = max(years, default=None)
-
-        best: Optional[Market] = None
-        for row in rows:
-            try:
-                if latest is not None and str(row.get("year")) != latest:
-                    continue
-                if today not in weekdays_of(row.get("daysoperation") or ""):
-                    continue
-                if not self._in_season(row, month):
-                    continue
-                close = parse_close_label(row.get("hoursoperations") or "")
-                if close is None:
-                    continue
-                lat = float(row["latitude"])
-                lon = float(row["longitude"])
-            except (KeyError, TypeError, ValueError):
-                continue
-            dist = _haversine_km(self.lat, self.lon, lat, lon)
-            if dist > self.radius_km:
-                continue
-            if best is None or dist < best.dist_km:
-                name = _display_name(str(row.get("marketname") or "").strip())
-                best = Market(name=name, close_label=close, dist_km=round(dist, 2))
-        return best
+    Drops trailing qualifiers (``Park``, ``Playground``, …), abbreviates
+    ``Square`` to ``SQ``, and — if still too wide — keeps the single most
+    distinctive (last) word so something legible always fits."""
+    from ..display import scenery as S          # local import: keep this module UI-free at top level
+    base = _VENUE_TRIM.sub("", name or "").strip()
+    base = _SQUARE.sub("SQ", base)
+    base = _VENUE_DROP.sub("", base)
+    base = re.sub(r"\s+", " ", base).strip(" -,").upper() or (name or "").upper()
+    if S.text_width(base) <= _PLACE_MAX_PX:
+        return base
+    words = base.split()
+    return words[-1] if words else base          # the namesake word ("HERNANDEZ")
