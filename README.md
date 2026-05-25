@@ -46,7 +46,9 @@ camera**.
 ### 🌳 Your block
 A farmers market open **today** near home — **`MARKET TODAY · MARIA HERNANDEZ · UNTIL 3`** —
 from a short list you keep in config (name, weekday, season), so it's always right and needs no
-key or scraping.
+key or scraping. And on someone's birthday the sign throws a fullscreen party — **`HAPPY
+BIRTHDAY · YENNIFER`** — rotating confetti, cake, and fireworks every few minutes all day, from
+a name and date (`MM-DD`) you list under `birthdays`.
 
 ### 🌙 Calm by design, dim by night
 One idea per screen on a priority + cooldown schedule, so nothing dominates and the trains
@@ -133,9 +135,10 @@ python scripts/find_station.py "dekalb"
 ```
 
 `config.example.yaml` also covers your `location`, `weather`, **`night`** dimming (bedtime +
-how dim it gets), the **`sky`/`space`/`local`** sections (toggle each ambient scene — ISS,
-planes, moon, humans-in-space, Earth — tune `sky.plane_radius_nm`, and list your nearby markets
-in `local.markets`), `notifications`/`trash`, and the `matrix`/`display`/`alerts` tuning knobs —
+how dim it gets), the **`sky`/`space`/`local`/`birthdays`** sections (toggle each ambient scene — ISS,
+planes, moon, humans-in-space, Earth — tune `sky.plane_radius_nm`, list your nearby markets
+in `local.markets`, and your people in `birthdays`), `notifications`/`trash`, and the
+`matrix`/`display`/`alerts` tuning knobs —
 every source stays keyless.
 
 ## Develop & preview (no hardware)
