@@ -18,7 +18,7 @@ classifiers = [
     "Topic :: Home Automation",
     "Topic :: Multimedia :: Graphics",
 ]
-dependencies = ["nyct-gtfs>=2.0.0", "Pillow>=9.0", "PyYAML>=6.0", "tzdata>=2024.1"]
+dependencies = ["nyct-gtfs>=2.0.0", "Pillow>=9.0", "PyYAML>=6.0", "sgp4>=2.20", "tzdata>=2024.1"]
 
 [project.optional-dependencies]
 dev = ["pytest>=7.0"]

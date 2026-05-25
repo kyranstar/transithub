@@ -1,0 +1,36 @@
+{
+  "_source": "NYC Parks Events Listing (Socrata, data.cityofnewyork.us). Three parallel tables joined by event_id: Event Listing (fudw-fgrp), Event Locations (cpcm-i88g), Event Categories (xtsw-fqvh). Real records, trimmed to the fields the client reads. Captured 2026-05; the published Event Listing freezes mid-2019, so dates here are historical and tests pin `now` to a fixture date.",
+  "listing": [
+    {"event_id": "125901", "title": "Arts, Culture & Fun: Back to the Block", "date": "2016-07-14T00:00:00.000", "start_time": "17:00", "end_time": "19:00", "cost_free": "1", "snippet": "A Night of Music and Art. Back to the Block features NYC teen artists and up-and-coming local musicians."},
+    {"event_id": "116681", "title": "Movies in the Parks: The Karate Kid (1984)", "date": "2016-07-15T00:00:00.000", "start_time": "20:30", "end_time": "22:30", "cost_free": "1", "snippet": "Join us for a free outdoor screening."},
+    {"event_id": "116730", "title": "Movies in the Parks: Frozen Sing-Along", "date": "2016-07-14T00:00:00.000", "start_time": "19:00", "end_time": "21:00", "cost_free": "1", "snippet": "A free outdoor sing-along screening."},
+    {"event_id": "178718", "title": "Sharon Wyse & Friends In Concert", "date": "2016-07-14T00:00:00.000", "start_time": "19:30", "end_time": "21:30", "cost_free": "1", "snippet": "Join the Old Stone House for a performance by vocalist Sharon Wyse & Friends."},
+    {"event_id": "100578", "title": "Brooklyn Rescue Mission Urban Harvest Center Fundraising Picnic", "date": "2016-07-14T00:00:00.000", "start_time": "11:00", "end_time": "17:00", "cost_free": "0", "snippet": "A very special fundraising picnic at the Bed-Stuy Farm."},
+    {"event_id": "100074", "title": "Pooch Parade", "date": "2016-07-14T00:00:00.000", "start_time": "11:00", "end_time": "13:00", "cost_free": "1", "snippet": "A parade for dogs and their owners."}
+  ],
+  "locations": [
+    {"event_id": "125901", "name": "Maria Hernandez Park", "park_id": "B113", "lat": "40.7036018371582", "long": "-73.92340087890625", "zip": "11237", "borough": "B"},
+    {"event_id": "116681", "name": "Maria Hernandez Park", "park_id": "B113", "lat": "40.7036018371582", "long": "-73.92340087890625", "zip": "11237", "borough": "B"},
+    {"event_id": "116730", "name": "Maria Hernandez Park", "park_id": "B113", "lat": "40.7036018371582", "long": "-73.92340087890625", "zip": "11237", "borough": "B"},
+    {"event_id": "178718", "name": "Old Stone House", "park_id": "B111", "lat": "40.672939300537", "long": "-73.984603881836", "address": "336 3rd St, Brooklyn, NY 11215", "zip": "11215", "borough": "B"},
+    {"event_id": "100578", "name": "Bed Stuy Farm", "lat": "40.68220138549805", "long": "-73.9269027709961", "address": "404 Decatur Street", "zip": "11233", "borough": "B"},
+    {"event_id": "100074", "name": "Wolfes Pond Park at Hylan Blvd", "park_id": "R031", "lat": "40.521690368652344", "long": "-74.19256591796875", "borough": "R"}
+  ],
+  "categories": [
+    {"event_id": "125901", "name": "Concerts"},
+    {"event_id": "125901", "name": "Festivals"},
+    {"event_id": "125901", "name": "Art"},
+    {"event_id": "125901", "name": "Dance"},
+    {"event_id": "116681", "name": "Film"},
+    {"event_id": "116681", "name": "Best for Kids"},
+    {"event_id": "116681", "name": "Free Summer Movies"},
+    {"event_id": "116730", "name": "Film"},
+    {"event_id": "116730", "name": "Best for Kids"},
+    {"event_id": "116730", "name": "Free Summer Movies"},
+    {"event_id": "178718", "name": "Concerts"},
+    {"event_id": "178718", "name": "Historic House Trust Sites"},
+    {"event_id": "100578", "name": "GreenThumb Partner Events"},
+    {"event_id": "100074", "name": "Festivals"},
+    {"event_id": "100074", "name": "Dogs"}
+  ]
+}

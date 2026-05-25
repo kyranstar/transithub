@@ -30,7 +30,8 @@ class WeatherClient:
     def _forecast_url(self) -> str:
         q = urllib.parse.urlencode({
             "latitude": self.lat, "longitude": self.lon,
-            "current": "temperature_2m,apparent_temperature,weather_code,precipitation",
+            "current": ("temperature_2m,apparent_temperature,weather_code,precipitation,"
+                        "relative_humidity_2m,wind_speed_10m"),
             "hourly": "precipitation_probability,precipitation,snowfall,weather_code",
             "daily": ("weather_code,temperature_2m_max,temperature_2m_min,"
                       "precipitation_probability_max,uv_index_max,sunrise,sunset"),
@@ -71,4 +72,6 @@ class WeatherClient:
             sunrise=datetime.fromisoformat(daily["sunrise"][0]),
             sunset=datetime.fromisoformat(daily["sunset"][0]),
             precip=precip,
+            humidity=int(cur.get("relative_humidity_2m") or 0),
+            wind_mph=float(cur.get("wind_speed_10m") or 0),
         )
