@@ -3,46 +3,68 @@
 [![tests](https://github.com/kyranstar/transithub/actions/workflows/ci.yml/badge.svg)](https://github.com/kyranstar/transithub/actions/workflows/ci.yml)
 ![no API keys needed](https://img.shields.io/badge/API_keys-not_needed-2ea44f)
 
-**Live NYC subway arrivals *and* weather on a Raspberry Pi LED matrix, styled like a real MTA sign.**
+**Live NYC subway arrivals, weather, and a calm ambient layer — the sky, space, and your
+neighborhood — on a Raspberry Pi LED matrix, styled like a real MTA sign.**
 
 <p align="center">
   <img src="docs/preview.png" width="520" alt="L and M train countdowns on the LED sign">
 </p>
 
 TransitHub drives an Adafruit-bonnet 64×32 RGB LED panel as a real-time subway sign, then
-rotates in animated weather — all from free, **keyless** APIs (Open-Meteo + the MTA feeds).
+quietly rotates in everything else worth a glance — animated weather, the ISS passing
+overhead, a full moon, a farmers market open today — all from free, **keyless** APIs
+(Open-Meteo, the MTA feeds, NASA EPIC, OpenSky, NYC Open Data). One thing on screen at a
+time; the trains are always the backbone.
+
+<p align="center">
+  <img src="docs/ambient-scenes.png" width="100%" alt="A grid of scenes: weather, a GO OUTSIDE verdict, an L suspension with its reason, an ISS pass, a full moon, a farmers market, a park movie, humans in space, Earth from space, a plane overhead, and a keep-windows-closed air advisory">
+</p>
 
 ## Highlights
 
-### 🌦 Weather & notifications
-Every 15 minutes the trains give way to an animated rundown: a scene matched to the current
-**conditions *and* time of day** (sun, clouds, rain, snow, and a night sky whose moon tracks
-the real lunar phase), the temp and today's
-high/low, and flags that appear **only when they matter** — high UV, unhealthy AQI, and a
-precise precip window like **`RAIN til 2a`** with chance and amount. Plus animated
-sunrise/sunset notices and a `TRASH TMRW` reminder.
+### 🚇 Trains first
+Real MTA GTFS-realtime arrivals (no key) for **any line, stop, and direction** you list,
+**weighted** by screen time; **direction-aware** DLY / RDCD / SUSP badges that won't flag the
+wrong way; clean countdowns that never show `0m` and flash `Now` on arrival. Disruptions now
+say *why* — `SIGNALS`, `SICK PASS`, `FDNY`, `TRACK WORK` — parsed from the alert text.
+
+### 🌦 Weather & advisories
+An animated rundown matched to the **conditions and time of day** (sun, clouds, rain, snow,
+fog, a night sky whose moon tracks the real lunar phase), today's high/low, a one-glance
+verdict (**`GO OUTSIDE`** / **`STAY IN`**), and flags **only when they matter** — UV, AQI, a
+precise **`RAIN til 2a`** window, and a **`WINDOWS / KEEP CLOSED`** nudge when the air is bad
+or it's muggy — plus sunrise/sunset notices and a `TRASH TMRW` reminder.
+
+### 🛰 Sky & space
+The ISS gets a heads-up minutes before it crosses (**`ISS PASS · 8:43 · LOOK NW`**, computed
+locally from a keyless TLE); a plane overhead gets an **`ABOVE YOU`** (OpenSky); the full and
+new moon get a brief salute on the night they fall; and now and then — how many **humans are
+in space**, or a fresh photo of **Earth from NASA's EPIC camera**.
+
+### 🌳 Your block
+A farmers market open **today** near home (**`MARKET TODAY · UNION SQ · UNTIL 6`**) and free,
+outdoor events tonight or tomorrow (**`PARK MOVIE · 8 PM · TOMPKINS`**) — filtered to within a
+few km of you, from NYC Open Data.
+
+### 🌙 Calm by design, dim by night
+One idea per screen on a priority + cooldown schedule, so nothing dominates and the trains
+always get a breath (the [scene framework](docs/scene-framework.md) explains how). The panel
+**dims gradually after sunset and a lot after bedtime**, and stale-data / offline warnings
+stay invisible until something is genuinely wrong.
 
 <p align="center">
-  <img src="docs/weather-rundown.gif" width="47%" alt="Animated weather rundown on a rainy day">
-  <img src="docs/weather-rain-night.gif" width="47%" alt="RAIN til 2a, rain falling at night">
+  <img src="docs/before.gif" width="47%" alt="Before: trains and a basic weather rundown">
+  <img src="docs/ambient-after.gif" width="47%" alt="After: the ambient rotation cycling weather, a suspension reason, an ISS pass, a full moon, a market, humans in space, and Earth">
 </p>
 <p align="center">
-  <img src="docs/weather-scenes.png" width="100%" alt="Weather scenes: clear, cloudy, rain, snow, night, sunset">
+  <img src="docs/night-mode.gif" width="60%" alt="The panel fading from full daylight brightness down to a low night glow">
 </p>
-
-### ⚙️ Fully configurable
-Track **any line, stop, and direction** in a few lines of YAML, **weight** how much screen
-time each stop gets, pick °F/°C, and set polling intervals, the trash day, and notification
-windows. `scripts/find_station.py "<name>"` prints stop IDs and what each direction means.
+<p align="center"><sub><b>Before</b> (left) and <b>after</b> (right), then the evening dim-down.</sub></p>
 
 ### 🧩 Runs anywhere — and builds without hardware
 Works on **Pi 3 / 4 / Zero 2 W**, installs and starts **headless on boot** (systemd), and
 ships a PNG **simulator** that renders the exact frames on any computer — so you can develop
-and preview with no Pi or panel attached.
-
-*Also:* real MTA GTFS-realtime arrivals (no key); **direction-aware** delay / reduced /
-suspended badges that won't flag the wrong direction; clean countdowns that never show `0m`
-and flash `Now` on arrival; correct NYC time even on a UTC Pi.
+and preview with no Pi or panel attached. Correct NYC time even on a UTC Pi.
 
 ## Parts
 
@@ -107,8 +129,10 @@ python scripts/find_station.py "dekalb"
 # L16   DeKalb Av [L]  (Bk)    N -> Manhattan    S -> Canarsie - Rockaway Parkway
 ```
 
-`config.example.yaml` also covers `location`/`weather`/`notifications`/`trash` and the
-`matrix`/`display`/`alerts` tuning knobs.
+`config.example.yaml` also covers your `location`, `weather`, **`night`** dimming (bedtime +
+how dim it gets), the **`sky`/`space`/`local`** ambient toggles (`local.radius_km` keeps
+markets and events near home), `notifications`/`trash`, and the `matrix`/`display`/`alerts`
+tuning knobs — every source stays keyless.
 
 ## Develop & preview (no hardware)
 
@@ -161,11 +185,17 @@ then set `hardware_mapping: adafruit-hat-pwm`.
 
 ## Credits
 
-[hzeller/rpi-rgb-led-matrix](https://github.com/hzeller/rpi-rgb-led-matrix) (driver) ·
-[Andrew-Dickinson/nyct-gtfs](https://github.com/Andrew-Dickinson/nyct-gtfs) (MTA parsing) ·
-[Open-Meteo](https://open-meteo.com) (weather) ·
-[spleen](https://github.com/fcambus/spleen) (font, BSD-2) ·
-[MTA open data](https://www.mta.info/developers)
+**Libraries:** [hzeller/rpi-rgb-led-matrix](https://github.com/hzeller/rpi-rgb-led-matrix)
+(driver) · [Andrew-Dickinson/nyct-gtfs](https://github.com/Andrew-Dickinson/nyct-gtfs) (MTA
+parsing) · [python-sgp4](https://github.com/brandon-rhodes/python-sgp4) (ISS orbit) ·
+[spleen](https://github.com/fcambus/spleen) (font, BSD-2)
+
+**Data, all keyless:** [Open-Meteo](https://open-meteo.com) (weather) ·
+[MTA open data](https://www.mta.info/developers) · [Celestrak](https://celestrak.org) (ISS
+TLE) · [OpenSky Network](https://opensky-network.org) (aircraft) ·
+[NASA EPIC](https://epic.gsfc.nasa.gov) (Earth imagery) ·
+[Open Notify](http://open-notify.org) (people in space) ·
+[NYC Open Data](https://opendata.cityofnewyork.us) (markets & events)
 
 ## License
 

@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "transithub"
 version = "0.1.0"
-description = "Live NYC subway arrivals and weather on a Raspberry Pi LED matrix, styled like a real MTA sign"
+description = "NYC subway arrivals, weather, and ambient sky/space/neighborhood scenes on a Raspberry Pi LED matrix, styled like a real MTA sign"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
