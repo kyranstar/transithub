@@ -12,12 +12,8 @@ _BULLET_D = 15        # roundel diameter, fits a 16px row
 _ROW_H = 16
 _TEXT_COLOR = (255, 170, 40)     # amber countdown
 _DEST_COLOR = (245, 222, 150)
-_ALERT_COLOR = (240, 60, 40)     # red disruption tag
+_ALERT_COLOR = (240, 60, 40)     # red disruption message
 _BLINK_MS = 250                  # ~2Hz on/off for arriving "Now"
-
-# A disrupted row alternates the countdown with a red "TAG REASON" message.
-_BADGE_CYCLE_MS = 5000
-_BADGE_TIME_MS = 3500            # countdown is shown for this slice; the message fills the rest
 
 
 def format_time(arrival: Arrival, now: datetime, threshold: int) -> Tuple[str, bool]:
@@ -117,18 +113,6 @@ class SignRenderer:
             self._draw_row(img, row, i * _ROW_H, tick_ms, blink_on)
         return img
 
-    def _disruption_msg(self, row: RowModel, tick_ms: int) -> Optional[str]:
-        """The `TAG REASON` line to show across the row right now (in red), or None
-        to show the normal headsign + countdown. A suspension shows it steadily; a
-        delay alternates it with the countdown so arrival times still come through."""
-        tag = row.alert_tag
-        if not tag:
-            return None
-        label = f"{tag} {row.alert_reason}".strip()   # "DLY SIGNALS", "SUSP", ...
-        if not row.has_arrival:
-            return label                              # suspended: the row is the message
-        return label if tick_ms % _BADGE_CYCLE_MS >= _BADGE_TIME_MS else None
-
     def _draw_row(self, img, row: RowModel, y0: int, tick_ms: int, blink_on: bool):
         if row.line != "?":
             bullet = make_bullet(row.line, _BULLET_D)
@@ -137,22 +121,26 @@ class SignRenderer:
         ty = y0 + (_ROW_H - self.font.height) // 2
         win_l = _BULLET_D + 2
 
-        # An arriving train always keeps its flashing "Now"; otherwise a disruption
-        # takes the whole row as one red "TAG REASON" message (scrolls if long).
-        if not row.arriving:
-            msg = self._disruption_msg(row, tick_ms)
-            if msg is not None:
-                # A suspension marquees continuously; a delay's message starts its
-                # scroll at the top of its beat so a glance reads it from the start.
-                scroll = tick_ms if not row.has_arrival else tick_ms % _BADGE_CYCLE_MS - _BADGE_TIME_MS
-                self._draw_dest(img, msg, y0, win_l, self.cols - 2, scroll, _ALERT_COLOR)
-                return
+        # A disruption shows a red "TAG REASON" message (e.g. "DLY SIGNAL PROBLEM",
+        # "SUSP SICK PASSENGER"), marqueeing if it's long. For a running line the
+        # countdown stays anchored on the right; a suspension uses the whole row. An
+        # arriving train keeps its flashing "Now" instead.
+        if row.alert_tag and not row.arriving:
+            msg = f"{row.alert_tag} {row.alert_reason}".strip()
+            reserve = self.font.text_width(row.time_text)
+            if row.has_arrival:
+                self._blit(img, self.cols - reserve, ty, row.time_text, _TEXT_COLOR, 0, self.cols)
+                win_r = self.cols - reserve - 2
+            else:
+                win_r = self.cols - 2
+            self._draw_dest(img, msg, y0, win_l, win_r, tick_ms, _ALERT_COLOR)
+            return
 
-        right_text = row.time_text if (not row.arriving or blink_on) else None
+        # Normal row (or arriving): countdown / flashing "Now" on the right, headsign
+        # in the middle.
         reserve = self.font.text_width(row.time_text)
-        if right_text is not None:
-            rx = self.cols - self.font.text_width(right_text)
-            self._blit(img, rx, ty, right_text, _TEXT_COLOR, 0, self.cols)
+        if not row.arriving or blink_on:
+            self._blit(img, self.cols - reserve, ty, row.time_text, _TEXT_COLOR, 0, self.cols)
         self._draw_dest(img, row.destination, y0, win_l, self.cols - reserve - 2, tick_ms,
                         _DEST_COLOR)
 

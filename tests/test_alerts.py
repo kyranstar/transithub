@@ -89,15 +89,15 @@ def test_result_aligns_with_trains():
 
 def test_parse_reason_from_header_phrases():
     assert parse_reason("trains delayed due to an NYPD investigation") == "POLICE"
-    assert parse_reason("while we address a mechanical problem") == "MECHANICAL"
-    assert parse_reason("because of a sick passenger at Bedford Av") == "SICK PASS"
+    assert parse_reason("while we address a mechanical problem") == "MECHANICAL PROBLEM"
+    assert parse_reason("because of a sick passenger at Bedford Av") == "SICK PASSENGER"
     assert parse_reason("delayed due to an FDNY investigation") == "FDNY"
-    assert parse_reason("we are addressing signal problems") == "SIGNALS"
+    assert parse_reason("we are addressing signal problems") == "SIGNAL PROBLEM"
 
 
 def test_parse_reason_from_whats_happening_block():
     # The description format used by maintenance alerts.
-    assert parse_reason("Transfer here.\nWhat's happening?\nSignal maintenance") == "SIGNALS"
+    assert parse_reason("Transfer here.\nWhat's happening?\nSignal maintenance") == "SIGNAL WORK"
     assert parse_reason("Note: ...\n\nWhat's happening?\nTrack maintenance") == "TRACK WORK"
     assert parse_reason("What's happening?\nWe're replacing tracks") == "TRACK WORK"
 
@@ -112,7 +112,7 @@ def test_parse_reason_unknown_and_empty_are_blank():
 def test_parse_reason_specific_wins_over_generic():
     # "signal problem" and "signal maintenance" both map to SIGNALS; ensure the
     # ordering never accidentally returns a less-specific label first.
-    assert parse_reason("a signal problem near the station") == "SIGNALS"
+    assert parse_reason("a signal problem near the station") == "SIGNAL PROBLEM"
 
 
 # -- alerts_for_trains (rich, from the captured fixture) -------------------
@@ -122,7 +122,7 @@ def test_alerts_for_trains_carries_tag_and_reason():
     # M08 is the M at Myrtle-Wyckoff; the fixture M Delays alert cites signal problems.
     [a] = c.alerts_for_trains([M_N], now=NOW)
     assert isinstance(a, LineAlert)
-    assert a.line == "M" and a.tag == "DLY" and a.reason == "SIGNALS"
+    assert a.line == "M" and a.tag == "DLY" and a.reason == "SIGNAL PROBLEM"
 
 
 def test_alerts_for_trains_reads_description_reason():
@@ -150,7 +150,7 @@ def test_alerts_for_trains_direction_aware_from_fixture():
     [north] = c.alerts_for_trains([L_N], now=NOW)
     assert north is not None and north.tag == "DLY" and north.reason == "FDNY"
     [south] = c.alerts_for_trains([L_S], now=NOW)
-    assert south is not None and south.tag == "DLY" and south.reason == "SICK PASS"
+    assert south is not None and south.tag == "DLY" and south.reason == "SICK PASSENGER"
 
 
 def test_alerts_for_trains_none_for_untracked_in_fixture():

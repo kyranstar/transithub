@@ -110,58 +110,42 @@ def _colors(img):
     return {color for _, color in img.getcolors(maxcolors=100000)}
 
 
-def test_badge_shows_countdown_in_time_window():
+def test_disrupted_row_shows_countdown_and_red_message():
     r = _renderer()
-    img = r.render([[_arr(2)]], tick_ms=0, now=NOW, alerts=[LineAlert("L", "DLY", "")])
+    img = r.render([[_arr(2)]], tick_ms=0, now=NOW,
+                   alerts=[LineAlert("L", "DLY", "SIGNAL PROBLEM")])
     cols = _colors(img)
-    assert _AMBER in cols           # countdown shown early in the cycle
-    assert _ALERT_RED not in cols   # tag not shown yet
+    assert _AMBER in cols          # countdown stays anchored on the right
+    assert _ALERT_RED in cols      # the red disruption message shares the row
 
 
-def test_badge_flashes_tag_later_in_window():
+def test_no_alert_means_no_red():
     r = _renderer()
-    img = r.render([[_arr(2)]], tick_ms=3600, now=NOW, alerts=[LineAlert("L", "DLY", "")])
-    assert _ALERT_RED in _colors(img)   # tag flashed in its slice of the cycle
-
-
-def test_suspended_row_shows_steady_tag():
-    cfg = Config(matrix=MatrixConfig(rows=32, cols=64), display=DisplayConfig(),
-                 trains=[TrackedTrain(line="L", stop_id="L16", direction="N")])
-    img = SignRenderer(cfg).render([[]], tick_ms=0, now=NOW, alerts=[LineAlert("L", "SUSP", "")])
-    assert _ALERT_RED in _colors(img)   # SUSP tag shown even with no arrivals
-
-
-def test_no_alert_means_no_badge():
-    r = _renderer()
-    img = r.render([[_arr(2)]], tick_ms=3600, now=NOW)  # no alerts arg
+    img = r.render([[_arr(2)]], tick_ms=0, now=NOW)  # no alerts arg
     assert _ALERT_RED not in _colors(img)
 
 
-def test_delay_reason_shown_inline_during_flash():
+def test_delay_message_includes_the_reason():
     r = _renderer()
-    # In the flash slice a known reason replaces the headsign, so the frame differs
-    # from the same delay with no reason — the reason rides the existing badge.
-    with_reason = r.render([[_arr(2)]], tick_ms=3600, now=NOW,
-                           alerts=[LineAlert("L", "DLY", "SIGNALS")])
-    no_reason = r.render([[_arr(2)]], tick_ms=3600, now=NOW,
-                         alerts=[LineAlert("L", "DLY", "")])
+    # The reason is part of the message: "DLY SIGNAL PROBLEM" differs from "DLY".
+    with_reason = r.render([[_arr(2)]], tick_ms=0, now=NOW,
+                           alerts=[LineAlert("L", "DLY", "SIGNAL PROBLEM")])
+    no_reason = r.render([[_arr(2)]], tick_ms=0, now=NOW, alerts=[LineAlert("L", "DLY", "")])
     assert with_reason.tobytes() != no_reason.tobytes()
 
 
-def test_delay_reason_hidden_during_countdown():
-    r = _renderer()
-    # Early in the cycle it's the normal countdown + headsign; the reason is hidden,
-    # so a reason changes nothing here.
-    plain = r.render([[_arr(2)]], tick_ms=0, now=NOW, alerts=[LineAlert("L", "DLY", "")])
-    reason = r.render([[_arr(2)]], tick_ms=0, now=NOW, alerts=[LineAlert("L", "DLY", "SIGNALS")])
-    assert plain.tobytes() == reason.tobytes()
+def test_suspended_row_shows_red_message():
+    cfg = Config(matrix=MatrixConfig(rows=32, cols=64), display=DisplayConfig(),
+                 trains=[TrackedTrain(line="L", stop_id="L16", direction="N")])
+    img = SignRenderer(cfg).render([[]], tick_ms=0, now=NOW, alerts=[LineAlert("L", "SUSP", "")])
+    assert _ALERT_RED in _colors(img)   # the SUSP message shows even with no arrivals
 
 
-def test_suspended_reason_replaces_no_service():
+def test_suspended_reason_extends_the_message():
     cfg = Config(matrix=MatrixConfig(rows=32, cols=64), display=DisplayConfig(),
                  trains=[TrackedTrain(line="L", stop_id="L16", direction="N")])
     with_reason = SignRenderer(cfg).render([[]], tick_ms=0, now=NOW,
-                                           alerts=[LineAlert("L", "SUSP", "SIGNALS")])
+                                           alerts=[LineAlert("L", "SUSP", "SICK PASSENGER")])
     plain = SignRenderer(cfg).render([[]], tick_ms=0, now=NOW,
                                      alerts=[LineAlert("L", "SUSP", "")])
-    assert with_reason.tobytes() != plain.tobytes()    # reason shown instead of "No service"
+    assert with_reason.tobytes() != plain.tobytes()    # "SUSP SICK PASSENGER" vs "SUSP"
