@@ -82,5 +82,29 @@ def test_weather_defaults(tmp_path):
     """))
     assert abs(cfg.location.latitude - 40.70) < 0.01
     assert cfg.weather.enabled is True and cfg.weather.units == "fahrenheit"
-    assert cfg.weather.rundown_every_minutes == 15 and cfg.weather.rundown_seconds == 60
+    assert cfg.weather.rundown_every_minutes == 6 and cfg.weather.rundown_rounds == 2
     assert cfg.notifications.sunrise is True and cfg.trash.days == ["monday"]
+
+
+def test_ambient_defaults(tmp_path):
+    cfg = load_config(_write(tmp_path, """
+        trains:
+          - {line: "L", stop_id: "L16", direction: "N"}
+    """))
+    assert cfg.night.bedtime == "21:30"
+    assert cfg.night.evening_brightness == 0.5 and cfg.night.night_brightness == 0.16
+    assert cfg.sky.enabled is True and cfg.space.enabled is True
+    assert cfg.local.enabled is True and cfg.local.radius_km == 4.0
+
+
+def test_ambient_overrides(tmp_path):
+    cfg = load_config(_write(tmp_path, """
+        trains:
+          - {line: "L", stop_id: "L16", direction: "N"}
+        night: {bedtime: "22:00", night_brightness: 0.1}
+        sky: {enabled: false}
+        local: {enabled: true, radius_km: 2.5}
+    """))
+    assert cfg.night.bedtime == "22:00" and cfg.night.night_brightness == 0.1
+    assert cfg.sky.enabled is False
+    assert cfg.local.radius_km == 2.5

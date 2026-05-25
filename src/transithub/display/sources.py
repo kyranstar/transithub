@@ -8,6 +8,7 @@ from __future__ import annotations
 from datetime import timedelta
 from typing import Callable, Optional
 
+from ..profile import Profile
 from .director import Context
 from .scenes.base import Scene
 from .scenes.health import HealthScene
@@ -27,7 +28,8 @@ class HealthSource:
 
 
 class WeatherRundownSource:
-    """The animated weather rundown; the Director's cooldown sets its cadence."""
+    """The animated weather rundown; the Director's cooldown sets its cadence. At
+    night it asks for the lean deck (just the essentials)."""
     name = "weather"
 
     def __init__(self, make_scene: Callable):
@@ -36,7 +38,8 @@ class WeatherRundownSource:
     def poll(self, ctx: Context) -> Optional[Scene]:
         if ctx.weather is None:
             return None
-        return self._make(ctx.weather, ctx.now)
+        lean = ctx.profile is Profile.NIGHT
+        return self._make(ctx.weather, ctx.now, lean)
 
 
 class SunEventSource:

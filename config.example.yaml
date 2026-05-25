@@ -32,12 +32,30 @@ weather:
   enabled: true
   units: fahrenheit          # or celsius
   poll_seconds: 600
-  rundown_every_minutes: 15  # how often the weather rundown interrupts the trains
-  rundown_seconds: 60        # how long it runs
+  rundown_every_minutes: 6   # how often the weather rundown interrupts the trains
+  rundown_rounds: 2          # full passes of the rundown's slides each time
 
 notifications:
   sunrise: true              # animated notice 30 min before -> 30 min after sunrise
   sunset: true               # animated notice 45 min before -> 10 min after sunset
+
+# Dim the panel in the evening so it isn't a floodlight at night: brightness ramps
+# from full at sunset down to evening_brightness at bedtime, then holds
+# night_brightness overnight (fractions of the matrix brightness above).
+night:
+  bedtime: "21:30"
+  evening_brightness: 0.5
+  night_brightness: 0.16
+
+# Ambient extras, all from free keyless feeds. Each is event-driven or occasional
+# and yields to the trains — see docs/scene-framework.md.
+sky:
+  enabled: true              # ISS passes (LOOK NW), planes overhead, full/new-moon nights
+space:
+  enabled: true              # "N humans in space" fact + a NASA EPIC photo of Earth
+local:
+  enabled: true              # nearby farmers markets + free outdoor events
+  radius_km: 4               # only show happenings within this distance of home
 
 trash:
   days: ["monday"]           # TRASH TMRW shows 3pm–midnight the day before each

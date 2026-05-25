@@ -50,14 +50,39 @@ class WeatherConfig:
     enabled: bool = True
     units: str = "fahrenheit"
     poll_seconds: int = 600
-    rundown_every_minutes: int = 15
-    rundown_seconds: int = 60
+    rundown_every_minutes: int = 6     # how often the weather rundown interrupts
+    rundown_rounds: int = 2            # full passes of the slide deck per rundown
 
 
 @dataclass
 class NotificationsConfig:
     sunrise: bool = True
     sunset: bool = True
+
+
+@dataclass
+class NightConfig:
+    """Evening/overnight dimming. Brightness ramps from full at sunset down to
+    `evening_brightness` at `bedtime`, then holds `night_brightness` overnight."""
+    bedtime: str = "21:30"
+    evening_brightness: float = 0.5
+    night_brightness: float = 0.16
+
+
+@dataclass
+class SkyConfig:
+    enabled: bool = True     # ISS passes, planes overhead, full/new-moon nights
+
+
+@dataclass
+class SpaceConfig:
+    enabled: bool = True     # humans-in-space fact + NASA EPIC Earth image
+
+
+@dataclass
+class LocalConfig:
+    enabled: bool = True     # nearby farmers markets + free outdoor events
+    radius_km: float = 4.0   # only show happenings within this distance of home
 
 
 @dataclass
@@ -74,6 +99,10 @@ class Config:
     location: LocationConfig = field(default_factory=LocationConfig)
     weather: WeatherConfig = field(default_factory=WeatherConfig)
     notifications: NotificationsConfig = field(default_factory=NotificationsConfig)
+    night: NightConfig = field(default_factory=NightConfig)
+    sky: SkyConfig = field(default_factory=SkyConfig)
+    space: SpaceConfig = field(default_factory=SpaceConfig)
+    local: LocalConfig = field(default_factory=LocalConfig)
     trash: TrashConfig = field(default_factory=TrashConfig)
     trains: List[TrackedTrain] = field(default_factory=list)
 
@@ -106,6 +135,10 @@ def load_config(path: str) -> Config:
         location=_section(LocationConfig, raw.get("location")),
         weather=_section(WeatherConfig, raw.get("weather")),
         notifications=_section(NotificationsConfig, raw.get("notifications")),
+        night=_section(NightConfig, raw.get("night")),
+        sky=_section(SkyConfig, raw.get("sky")),
+        space=_section(SpaceConfig, raw.get("space")),
+        local=_section(LocalConfig, raw.get("local")),
         trash=_section(TrashConfig, raw.get("trash")),
         trains=trains,
     )
