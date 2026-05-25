@@ -89,37 +89,47 @@ class BirthdayScene(Scene):
     def _bg_cake(self, img: Image.Image, frame: int) -> None:
         S.gradient(img, _CAKE_BG)
         px = img.load()
-        base_top = self.rows - 5                        # cake body: bottom 5 rows
-        for x in range(8, self.cols - 8):
+        base_top = self.rows - 9                         # cake body fills the bottom 9 rows
+        for x in range(5, self.cols - 5):
             for y in range(base_top, self.rows):
                 px[x, y] = (198, 122, 86)
-            px[x, base_top] = (250, 240, 246)           # icing along the top edge
-        for j, cx in enumerate(range(13, self.cols - 9, 11)):   # candles + flames
+            px[x, base_top] = (250, 240, 246)            # icing along the top edge
+            if (x % 6) in (2, 3):                         # little icing drips
+                px[x, base_top + 1] = (250, 240, 246)
+        # candles stand in the gap above the cake; flames flicker over them — clear
+        # of the header above and the name iced onto the cake below.
+        for j, cx in enumerate(range(11, self.cols - 8, 12)):
             for y in range(base_top - 4, base_top):
                 px[cx, y] = (244, 238, 250)
-            fy = base_top - 5 - (1 if ((frame + j * 2) % 6) < 3 else 0)
-            if 0 <= fy < self.rows:
-                px[cx, fy] = (255, 244, 186)
-                if fy + 1 < self.rows:
-                    px[cx, fy + 1] = (255, 188, 86)
+            fy = base_top - 6 - (1 if ((frame + j * 2) % 6) < 3 else 0)
+            for fyy, col in ((fy, (255, 244, 186)), (fy + 1, (255, 184, 80))):
+                if 0 <= fyy < self.rows:
+                    px[cx, fyy] = col
 
     def _bg_fireworks(self, img: Image.Image, frame: int) -> None:
         S.gradient(img, _FW_BG)
-        S.stars(img, frame, seed=29, count=10)
+        S.stars(img, frame, seed=29, count=8)
         px = img.load()
-        for j, (cx, cy) in enumerate(((14, 9), (50, 8), (32, 25))):
-            phase = (frame + j * 7) % 18                 # expand-then-fade cycle
-            if phase >= 12:                              # faded part of the cycle
+        # several bursts on staggered cycles, ringing the text; each blooms outward
+        # (12 two-pixel spokes) and fades, so something is always going off.
+        for j, (cx, cy) in enumerate(((12, 7), (52, 6), (20, 27), (45, 26), (32, 15))):
+            phase = (frame + j * 5) % 16
+            if phase >= 11:                              # dark gap between bursts
                 continue
-            r = phase // 3 + 1
-            color = _FW_COLORS[j % len(_FW_COLORS)]
-            for ang in range(0, 360, 45):                # 8 spokes
-                x = int(cx + r * math.cos(math.radians(ang)))
-                y = int(cy + r * math.sin(math.radians(ang)))
-                if 0 <= x < self.cols and 0 <= y < self.rows:
-                    px[x, y] = color
+            r = phase // 2 + 1                           # radius grows 1..6
+            fade = max(0.25, 1.0 - phase / 11)
+            base = _FW_COLORS[j % len(_FW_COLORS)]
+            color = tuple(int(v * fade) for v in base)
+            for ang in range(0, 360, 30):                # 12 spokes, 2px thick
+                for rr in (r, r - 1):
+                    if rr < 1:
+                        continue
+                    x = int(cx + rr * math.cos(math.radians(ang)))
+                    y = int(cy + rr * math.sin(math.radians(ang)))
+                    if 0 <= x < self.cols and 0 <= y < self.rows:
+                        px[x, y] = color
             if 0 <= cx < self.cols and 0 <= cy < self.rows:
-                px[cx, cy] = (255, 255, 255)
+                px[cx, cy] = (255, 255, 255)             # bright core
 
     def render(self, elapsed_ms: int) -> Image.Image:
         frame = elapsed_ms // 100
@@ -130,7 +140,8 @@ class BirthdayScene(Scene):
         hdr1, hdr2, name = self.lines()
         _centered(img, 1, hdr1, _HDR)
         _centered(img, 9, hdr2, _HDR)
-        _centered(img, 18, name, _NAME)
+        name_y = 24 if self.style == "cake" else 18    # cake: name iced onto the cake
+        _centered(img, name_y, name, _NAME)
         if elapsed_ms < 600:        # gentle fade-in so it arrives calmly
             return Image.blend(Image.new("RGB", (self.cols, self.rows), (0, 0, 0)),
                                img, elapsed_ms / 600)
