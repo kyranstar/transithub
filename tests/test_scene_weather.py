@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from transithub.weather.model import Weather, Condition
-from transithub.display.scenes.weather import WeatherScene, INTRO_MS, ROUND_SLIDE_MS
+from transithub.display.scenes.weather import WeatherScene, INTRO_MS, SLIDE_MS
 
 NOW = datetime(2026, 5, 23, 14, 0)
 
@@ -14,13 +14,13 @@ def _w(**kw):
     return Weather(**base)
 
 
-def _scene(w, secs=60, **kw):
-    return WeatherScene(w, NOW, rundown_seconds=secs, cols=64, rows=32, trash_days=[], **kw)
+def _scene(w, **kw):
+    return WeatherScene(w, NOW, cols=64, rows=32, trash_days=[], **kw)
 
 
 def test_duration_and_size():
-    s = _scene(_w())
-    assert s.duration_ms == 60_000
+    s = _scene(_w())                          # 2 rounds of the deck -> derived duration
+    assert s.duration_ms == INTRO_MS + 2 * s.slide_count * SLIDE_MS
     assert s.render(0).size == (64, 32) and s.render(50_000).mode == "RGB"
 
 
@@ -42,7 +42,7 @@ def test_now_slide_shows_temp_pixels():
 
 def test_wet_carries_scene_background_to_forecast_slide():
     # the forecast slide of a rainy rundown uses the rain scene, not the plain dim bg
-    forecast_tick = 4000 + 7000 + 1500       # past intro + Now, mid Forecast slide
+    forecast_tick = INTRO_MS + SLIDE_MS + SLIDE_MS // 2   # mid the Forecast slide (idx 1)
     rain = _scene(_w(condition=Condition.RAIN)).render(forecast_tick)
     dry = _scene(_w(condition=Condition.CLOUDY)).render(forecast_tick)
     assert rain.tobytes() != dry.tobytes()   # backgrounds differ -> rain scene carried over
@@ -50,7 +50,7 @@ def test_wet_carries_scene_background_to_forecast_slide():
 
 def _night(now, **kw):
     return WeatherScene(_w(condition=Condition.CLEAR, **kw), now,
-                        rundown_seconds=60, cols=64, rows=32, trash_days=[])
+                        cols=64, rows=32, trash_days=[])
 
 
 def test_clear_night_draws_the_moon():
@@ -86,13 +86,13 @@ def test_fog_background_differs_from_clear():
 def _hot_day(**kw):
     # midday, clear, scorching -> the pulsing-sun hero
     return WeatherScene(_w(condition=Condition.CLEAR, temp=96.0, feels_like=99.0, **kw),
-                        NOW, rundown_seconds=60, cols=64, rows=32, trash_days=[])
+                        NOW, cols=64, rows=32, trash_days=[])
 
 
 def test_hot_day_scene_renders_and_differs_from_mild():
     hot = _hot_day()._scene_bg(2)
     mild = WeatherScene(_w(condition=Condition.CLEAR, temp=68.0, feels_like=66.0),
-                        NOW, rundown_seconds=60, cols=64, rows=32, trash_days=[])._scene_bg(2)
+                        NOW, cols=64, rows=32, trash_days=[])._scene_bg(2)
     assert hot.size == (64, 32)
     assert hot.tobytes() != mild.tobytes()    # pulsing sun replaces the static sun
 
@@ -146,14 +146,9 @@ def test_no_summary_slide_for_unremarkable_day():
 
 # --- rounds cadence ---------------------------------------------------------
 def test_rounds_derives_duration():
-    s = _scene(_w(uv_index=9.0), rounds=2)
-    assert s._slide_ms == ROUND_SLIDE_MS
-    assert s.duration_ms == INTRO_MS + 2 * s.slide_count * ROUND_SLIDE_MS
-
-
-def test_rounds_none_keeps_rundown_duration():
-    s = _scene(_w(), secs=45)               # no rounds -> backward-compatible
-    assert s.duration_ms == 45_000
+    s = _scene(_w(uv_index=9.0), rounds=3)
+    assert s._slide_ms == SLIDE_MS
+    assert s.duration_ms == INTRO_MS + 3 * s.slide_count * SLIDE_MS
 
 
 # --- lean (night) mode ------------------------------------------------------

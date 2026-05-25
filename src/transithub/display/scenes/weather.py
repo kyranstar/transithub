@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from typing import Optional
 
 from PIL import Image
 
@@ -13,8 +12,7 @@ from .. import scenery as S
 from .base import Scene
 
 INTRO_MS = 4000
-SLIDE_MS = 7000          # leisurely cadence for the open-ended rundown
-ROUND_SLIDE_MS = 3400    # snappier cadence when playing a fixed number of rounds
+SLIDE_MS = 3400          # how long each slide holds
 DIP_MS = 500
 OUT = (16, 12, 28)
 DIM_BG = [(0.0, (10, 12, 28)), (0.5, (34, 22, 40)), (1.0, (40, 22, 18))]
@@ -34,8 +32,8 @@ _TINT = {Condition.CLEAR: (1.0, None, 0.0), Condition.CLOUDY: (0.82, (92, 94, 11
 
 
 class WeatherScene(Scene):
-    def __init__(self, weather, now: datetime, rundown_seconds=60, cols=64, rows=32,
-                 trash_days=(), rounds: Optional[int] = None, lean: bool = False):
+    def __init__(self, weather, now: datetime, cols=64, rows=32,
+                 trash_days=(), rounds: int = 2, lean: bool = False):
         self.w = weather
         self.now = now
         self.cols, self.rows = cols, rows
@@ -58,15 +56,9 @@ class WeatherScene(Scene):
             self._slides += [self._flag_slide(f) for f in flags(weather, now, list(trash_days))]
         self.slide_count = len(self._slides)
 
-        # Cadence + total runtime. With `rounds` the scene plays exactly that many
-        # full passes (snappy) and the duration is derived; otherwise it's an
-        # open-ended rundown sized by `rundown_seconds` (backward compatible).
-        if rounds is not None:
-            self._slide_ms = ROUND_SLIDE_MS
-            self.duration_ms = INTRO_MS + rounds * self.slide_count * self._slide_ms
-        else:
-            self._slide_ms = SLIDE_MS
-            self.duration_ms = rundown_seconds * 1000
+        # Plays exactly `rounds` full passes of the deck, then ends.
+        self._slide_ms = SLIDE_MS
+        self.duration_ms = INTRO_MS + rounds * self.slide_count * SLIDE_MS
 
     # --- backgrounds --------------------------------------------------------
     def _scene_bg(self, frame: int) -> Image.Image:

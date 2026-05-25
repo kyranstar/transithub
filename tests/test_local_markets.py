@@ -8,8 +8,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from transithub.local.markets import (Market, MarketSpec, market_today,
-                                       parse_specs)
+from transithub.local.markets import Market, market_today, parse_specs
 
 # Maria Hernandez: every Saturday, in season 2026-05-23 .. 2026-11-22, until 3.
 MARIA = {"name": "MARIA HERNANDEZ", "day": "saturday",

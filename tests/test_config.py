@@ -65,7 +65,7 @@ def test_loads_weather_config(tmp_path):
         trains:
           - {line: "L", stop_id: "L16", direction: "N"}
         location: {latitude: 40.5, longitude: -73.9}
-        weather: {enabled: true, units: celsius, poll_seconds: 300, rundown_every_minutes: 10, rundown_seconds: 45}
+        weather: {enabled: true, units: celsius, poll_seconds: 300, rundown_every_minutes: 10}
         notifications: {sunrise: false, sunset: true}
         trash: {days: ["tuesday", "friday"]}
     """))

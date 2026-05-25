@@ -80,7 +80,6 @@ def test_next_pass_handles_garbage_tle():
 
 
 # ============================================================== SkyClient
-from transithub.sky import IssPass as _IssPass  # noqa: E402
 from transithub.sky import Plane, SkyClient  # noqa: E402
 
 

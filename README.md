@@ -50,9 +50,10 @@ key or scraping.
 
 ### 🌙 Calm by design, dim by night
 One idea per screen on a priority + cooldown schedule, so nothing dominates and the trains
-always get a breath (the [scene framework](docs/scene-framework.md) explains how). The panel
-**dims gradually after sunset and a lot after bedtime**, and stale-data / offline warnings
-stay invisible until something is genuinely wrong.
+always get a breath (the [scene framework](docs/scene-framework.md) explains how). Brightness
+**follows one smooth curve** — easing up at dawn, down through the evening, and to a low
+overnight glow after bedtime, with no jarring jumps. Stale-data / offline warnings stay
+invisible until something is genuinely wrong.
 
 <p align="center">
   <img src="docs/before.gif" width="47%" alt="Before: trains and a basic weather rundown">
@@ -61,7 +62,7 @@ stay invisible until something is genuinely wrong.
 <p align="center">
   <img src="docs/night-mode.gif" width="60%" alt="The panel fading from full daylight brightness down to a low night glow">
 </p>
-<p align="center"><sub><b>Before</b> (left) and <b>after</b> (right), then the evening dim-down.</sub></p>
+<p align="center"><sub><b>Before</b> (left) and <b>after</b> (right), then the smooth evening dim-down.</sub></p>
 
 ### 🧩 Runs anywhere — and builds without hardware
 Works on **Pi 3 / 4 / Zero 2 W**, installs and starts **headless on boot** (systemd), and
