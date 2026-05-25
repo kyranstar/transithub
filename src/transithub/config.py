@@ -76,6 +76,7 @@ class SkyConfig:
     planes: bool = True             # a plane passing directly overhead
     moon: bool = True               # full / new-moon-night salute
     plane_radius_nm: float = 3.0    # how close a plane must be to count as "overhead"
+    plane_max_alt_ft: int = 12000   # only planes below this (low, audible) count
 
 
 @dataclass

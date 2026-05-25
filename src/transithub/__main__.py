@@ -169,14 +169,16 @@ def _build_director(cfg, renderer, store, holders, health):
     slots = [Slot(HealthSource(cols, rows), priority=100, cooldown_ms=120_000,
                   takeover=True, interjection=False)]
     if cfg.sky.enabled:
-        # ISS + planes may take over any time (cool day or night); the cooldowns keep
-        # a single ISS pass or a steady stream of planes from hogging the screen.
+        # ISS + planes may take over any time (cool day or night). The ISS cooldown
+        # keeps one pass from replaying ~8x; the plane source already only fires for
+        # low, audible traffic (see SkyClient), so a short cooldown lets it track what
+        # you actually hear overhead without a 35,000-ft cruiser triggering it.
         if cfg.sky.iss:
             slots.append(Slot(IssPassSource(cols, rows), priority=90,
                               cooldown_ms=240_000, takeover=True, interjection=False))
         if cfg.sky.planes:
             slots.append(Slot(PlaneOverheadSource(cols, rows), priority=85,
-                              cooldown_ms=480_000, takeover=True, interjection=False))
+                              cooldown_ms=60_000, takeover=True, interjection=False))
         if cfg.sky.moon:
             slots.append(Slot(MoonEventSource(cols, rows), priority=80,
                               cooldown_ms=12 * 3_600_000, takeover=False,
@@ -288,7 +290,8 @@ def main(argv=None):
                                cfg.weather.poll_seconds, health)).start()
     if cfg.sky.enabled and (cfg.sky.iss or cfg.sky.planes):   # the moon needs no poller
         sky_client = SkyClient(cfg.location.latitude, cfg.location.longitude,
-                               radius_nm=cfg.sky.plane_radius_nm)
+                               radius_nm=cfg.sky.plane_radius_nm,
+                               max_alt_ft=cfg.sky.plane_max_alt_ft)
         threading.Thread(target=_sky_poller, daemon=True,
                          args=(stop_event, holders["sky"], sky_client,
                                cfg.sky.iss, cfg.sky.planes)).start()

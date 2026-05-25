@@ -55,6 +55,7 @@ sky:
   planes: true               # a plane passing directly overhead (ABOVE YOU / JFK > LHR)
   moon: true                 # a brief salute on full- and new-moon nights
   plane_radius_nm: 3         # how close (nautical miles) a plane must be to count as overhead
+  plane_max_alt_ft: 12000    # only planes below this count — i.e. low enough to actually hear
 space:
   enabled: true              # master switch for the space interjections (toggle each below)
   humans: true               # an occasional "N humans in space" fact

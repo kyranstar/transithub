@@ -35,6 +35,9 @@ ROUTE_URL = "https://hexdb.io/api/v1/route/icao/{callsign}"
 
 DEFAULT_RADIUS_NM = 3              # ~3.5 mi: close enough to genuinely be "above you"
 DEFAULT_MIN_ALT_FT = 1000          # ignore aircraft on approach/departure on the deck
+# Only count planes low enough to actually hear, so "overhead" tracks what you'd
+# notice outside — high cruising traffic (35,000 ft) is constant but inaudible.
+DEFAULT_MAX_ALT_FT = 12000
 COMPASS = ("N", "NE", "E", "SE", "S", "SW", "W", "NW")
 
 # A small built-in ICAO -> IATA map for busy airports, so the common routes
@@ -119,11 +122,13 @@ def _aircraft_list(data: dict, key: str) -> list:
     return rows if isinstance(rows, list) else []
 
 
-def _row_to_plane(a: dict, lat: float, lon: float, min_alt_ft: float):
+def _row_to_plane(a: dict, lat: float, lon: float, min_alt_ft: float,
+                  max_alt_ft: Optional[float] = None):
     """(distance_deg, Plane) for a usable airborne row, else None.
 
     Skips on-ground craft (``alt_baro == "ground"``), rows missing a position or
-    altitude, and anything below the altitude floor."""
+    altitude, anything below the floor, and (when ``max_alt_ft`` is set) anything
+    above it — the ceiling keeps it to planes low enough to actually hear."""
     try:
         if not isinstance(a, dict):
             return None
@@ -134,6 +139,8 @@ def _row_to_plane(a: dict, lat: float, lon: float, min_alt_ft: float):
             return None
         alt_ft = float(alt)
         if alt_ft < min_alt_ft:
+            return None
+        if max_alt_ft is not None and alt_ft > max_alt_ft:
             return None
         plat, plon = a.get("lat"), a.get("lon")
         if not isinstance(plat, (int, float)) or not isinstance(plon, (int, float)):
@@ -155,11 +162,15 @@ def _row_to_plane(a: dict, lat: float, lon: float, min_alt_ft: float):
 
 
 def parse_aircraft(data: dict, lat: float, lon: float, key: str = "aircraft",
-                   min_alt_ft: float = DEFAULT_MIN_ALT_FT) -> List[Plane]:
-    """All usable airborne aircraft in a feed response, nearest first."""
+                   min_alt_ft: float = DEFAULT_MIN_ALT_FT,
+                   max_alt_ft: Optional[float] = None) -> List[Plane]:
+    """All usable airborne aircraft in a feed response, nearest first.
+
+    ``max_alt_ft`` (when set) drops anything above the ceiling, so only low,
+    audible traffic counts as overhead."""
     found = []
     for a in _aircraft_list(data, key):
-        hit = _row_to_plane(a, lat, lon, min_alt_ft)
+        hit = _row_to_plane(a, lat, lon, min_alt_ft, max_alt_ft)
         if hit is not None:
             found.append(hit)
     found.sort(key=lambda dp: dp[0])
@@ -167,9 +178,10 @@ def parse_aircraft(data: dict, lat: float, lon: float, key: str = "aircraft",
 
 
 def nearest_plane(data: dict, lat: float, lon: float, key: str = "aircraft",
-                  min_alt_ft: float = DEFAULT_MIN_ALT_FT) -> Optional[Plane]:
-    """The closest airborne aircraft above the floor in one response, or None."""
-    planes = parse_aircraft(data, lat, lon, key, min_alt_ft)
+                  min_alt_ft: float = DEFAULT_MIN_ALT_FT,
+                  max_alt_ft: Optional[float] = None) -> Optional[Plane]:
+    """The closest airborne aircraft within the altitude band in one response."""
+    planes = parse_aircraft(data, lat, lon, key, min_alt_ft, max_alt_ft)
     return planes[0] if planes else None
 
 
@@ -193,6 +205,7 @@ def lookup_route(callsign: str,
 
 def fetch_overhead(lat: float, lon: float, radius_nm: int = DEFAULT_RADIUS_NM,
                    min_alt_ft: float = DEFAULT_MIN_ALT_FT,
+                   max_alt_ft: Optional[float] = None,
                    fetcher: Callable[[str], dict] = _default_fetch,
                    route_fetcher: Callable[[str], dict] = _default_fetch) -> Optional[Plane]:
     """Nearest airborne plane over the spot, with its route when known, or None.
@@ -207,7 +220,7 @@ def fetch_overhead(lat: float, lon: float, radius_nm: int = DEFAULT_RADIUS_NM,
             data = fetcher(adsb_url(template, lat, lon, radius_nm))
         except Exception:
             continue
-        plane = nearest_plane(data, lat, lon, key, min_alt_ft)
+        plane = nearest_plane(data, lat, lon, key, min_alt_ft, max_alt_ft)
         if plane is not None:
             break
     if plane is None:

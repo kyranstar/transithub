@@ -95,7 +95,7 @@ def test_ambient_defaults(tmp_path):
     assert cfg.night.evening_brightness == 0.5 and cfg.night.night_brightness == 0.16
     assert cfg.sky.enabled is True and cfg.space.enabled is True
     assert cfg.sky.iss and cfg.sky.planes and cfg.sky.moon
-    assert cfg.sky.plane_radius_nm == 3.0
+    assert cfg.sky.plane_radius_nm == 3.0 and cfg.sky.plane_max_alt_ft == 12000
     assert cfg.space.humans and cfg.space.earth
     assert cfg.local.enabled is True and cfg.local.markets == []
 

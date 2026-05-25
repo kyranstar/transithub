@@ -12,12 +12,12 @@ from typing import Callable, Optional
 from . import IssPass, Plane
 from .iss import TLE_URL, next_pass
 from .iss import _default_fetch as _default_text_fetch
-from .planes import DEFAULT_MIN_ALT_FT, DEFAULT_RADIUS_NM
+from .planes import DEFAULT_MAX_ALT_FT, DEFAULT_MIN_ALT_FT, DEFAULT_RADIUS_NM
 from .planes import _default_fetch as _default_json_fetch
 from .planes import fetch_overhead
 
 # Recommended poll cadences for the coordinator (seconds).
-POLL_INTERVALS = {"iss": 300, "plane": 90}
+POLL_INTERVALS = {"iss": 300, "plane": 60}
 
 _TLE_TTL_S = 12 * 3600          # a TLE stays accurate for ~half a day
 _PASS_LOOKAHEAD_H = 6.0         # search this far ahead for the next pass
@@ -34,6 +34,7 @@ class SkyClient:
                  route_fetcher: Callable[[str], dict] = _default_json_fetch,
                  radius_nm: int = DEFAULT_RADIUS_NM,
                  min_alt_ft: float = DEFAULT_MIN_ALT_FT,
+                 max_alt_ft: float = DEFAULT_MAX_ALT_FT,
                  clock: Callable[[], float] = time.monotonic):
         self.lat = lat
         self.lon = lon
@@ -42,6 +43,7 @@ class SkyClient:
         self._fetch_route = route_fetcher
         self.radius_nm = radius_nm
         self.min_alt_ft = min_alt_ft
+        self.max_alt_ft = max_alt_ft
         self._clock = clock
         self._tle_text: Optional[str] = None
         self._tle_at: float = -1e18
@@ -68,7 +70,7 @@ class SkyClient:
         return next_pass(tle, self.lat, self.lon, hours=_PASS_LOOKAHEAD_H)
 
     def plane_overhead(self) -> Optional[Plane]:
-        """Nearest airborne aircraft within the search radius right now, or None."""
+        """Nearest low, audible aircraft within the search radius right now, or None."""
         return fetch_overhead(self.lat, self.lon, self.radius_nm, self.min_alt_ft,
-                              fetcher=self._fetch_states,
+                              max_alt_ft=self.max_alt_ft, fetcher=self._fetch_states,
                               route_fetcher=self._fetch_route)

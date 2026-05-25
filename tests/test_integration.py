@@ -81,8 +81,8 @@ def test_constant_plane_overhead_does_not_dominate():
     holders["sky"] = Holder(SkyData(
         plane_overhead=Plane("BAW178", 35000, 45.0, "NE", route="JFK > LHR")))
     seen = _run(_director(holders))
-    assert seen["TrainScene"] == max(seen.values())
-    assert seen.get("PlaneOverheadScene", 0) <= seen["TrainScene"] // 5
+    assert seen["TrainScene"] == max(seen.values())          # trains stay the backbone
+    assert seen["TrainScene"] > 3 * seen.get("PlaneOverheadScene", 0)
 
 
 def test_night_dims_the_frame():
