@@ -100,6 +100,32 @@ def test_ambient_defaults(tmp_path):
     assert cfg.local.enabled is True and cfg.local.markets == []
 
 
+def test_birthdays_and_market_cadence(tmp_path):
+    cfg = load_config(_write(tmp_path, """
+        trains:
+          - {line: "L", stop_id: "L16", direction: "N"}
+        local:
+          every_minutes: 45
+        birthdays:
+          every_minutes: 15
+          people:
+            - {name: "Yennifer", date: "09-17"}
+    """))
+    assert cfg.local.every_minutes == 45
+    assert cfg.birthdays.enabled is True and cfg.birthdays.every_minutes == 15
+    assert cfg.birthdays.people == [{"name": "Yennifer", "date": "09-17"}]
+
+
+def test_birthdays_and_local_cadence_defaults(tmp_path):
+    cfg = load_config(_write(tmp_path, """
+        trains:
+          - {line: "L", stop_id: "L16", direction: "N"}
+    """))
+    assert cfg.local.every_minutes == 30           # market cadence default
+    assert cfg.birthdays.enabled is True
+    assert cfg.birthdays.every_minutes == 10 and cfg.birthdays.people == []
+
+
 def test_ambient_overrides(tmp_path):
     cfg = load_config(_write(tmp_path, """
         trains:

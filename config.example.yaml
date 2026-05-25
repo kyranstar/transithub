@@ -62,11 +62,20 @@ space:
   earth: true                # an occasional real NASA EPIC photo of Earth
 local:
   enabled: true              # show a nearby farmers market that's open today
+  every_minutes: 30          # how often the market notice appears
   markets:                   # your local market(s) — edit/add your own
     - name: "MARIA HERNANDEZ"
       day: "saturday"        # the weekday it runs
       season: ["2026-05-23", "2026-11-22"]   # inclusive [start, end]; omit for year-round
       until: "3"             # closing hour -> shows "UNTIL 3"
+
+birthdays:
+  enabled: true              # throw a fullscreen party on someone's birthday
+  every_minutes: 10          # how often the takeover appears (all day, from midnight)
+  # Each entry: a name and a year-agnostic date as MM-DD. On that day the sign
+  # rotates through confetti, cake, and fireworks animations.
+  people:                    # your people — edit/add your own
+    - {name: "Yennifer", date: "09-17"}
 
 trash:
   days: ["monday"]           # TRASH TMRW shows 3pm–midnight the day before each

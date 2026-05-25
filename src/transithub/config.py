@@ -89,7 +89,15 @@ class SpaceConfig:
 @dataclass
 class LocalConfig:
     enabled: bool = True                    # show a nearby farmers market open today
+    every_minutes: int = 30                 # how often the market notice appears
     markets: List[dict] = field(default_factory=list)   # curated; see config.example.yaml
+
+
+@dataclass
+class BirthdaysConfig:
+    enabled: bool = True                    # show a HAPPY BIRTHDAY takeover on someone's day
+    every_minutes: int = 10                 # how often the birthday takeover appears
+    people: List[dict] = field(default_factory=list)    # {name, date: "MM-DD"}; see config.example.yaml
 
 
 @dataclass
@@ -110,6 +118,7 @@ class Config:
     sky: SkyConfig = field(default_factory=SkyConfig)
     space: SpaceConfig = field(default_factory=SpaceConfig)
     local: LocalConfig = field(default_factory=LocalConfig)
+    birthdays: BirthdaysConfig = field(default_factory=BirthdaysConfig)
     trash: TrashConfig = field(default_factory=TrashConfig)
     trains: List[TrackedTrain] = field(default_factory=list)
 
@@ -146,6 +155,7 @@ def load_config(path: str) -> Config:
         sky=_section(SkyConfig, raw.get("sky")),
         space=_section(SpaceConfig, raw.get("space")),
         local=_section(LocalConfig, raw.get("local")),
+        birthdays=_section(BirthdaysConfig, raw.get("birthdays")),
         trash=_section(TrashConfig, raw.get("trash")),
         trains=trains,
     )
