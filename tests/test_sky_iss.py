@@ -125,7 +125,7 @@ def test_client_plane_uses_injected_states_and_route_fetchers():
     c = SkyClient(LAT, LON, states_fetcher=lambda url: states,
                   route_fetcher=lambda url: route)
     p = c.plane_overhead()
-    # The client's default audibility ceiling (12,000 ft) skips the 35,000-ft cruiser
+    # The client's default audibility ceiling (10,000 ft) skips the 35,000-ft cruiser
     # (BAW178) and surfaces the low, audible plane (UAL415 @ 8,175 ft).
     assert isinstance(p, Plane) and p.callsign == "UAL415"
     assert p.route == "JFK > LHR"             # route lookup wired through the client

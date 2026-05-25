@@ -35,7 +35,7 @@ class RowModel:
     arriving: bool
     has_arrival: bool = True
     alert_tag: Optional[str] = None
-    alert_reason: str = ""        # short cause ("SIGNALS", "SICK PASS"); "" if unknown
+    alert_reason: str = ""        # short cause ("SIGNAL PROBLEM", "SICK PASSENGER"); "" if unknown
 
 
 _SUSPENDED_WEIGHT_FACTOR = 0.5   # a suspended line shows half as often

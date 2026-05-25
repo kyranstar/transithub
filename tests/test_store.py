@@ -24,9 +24,9 @@ def test_store_line_alerts_roundtrip():
     from transithub.mta.alerts import LineAlert
     store = ArrivalStore(n_trains=2)
     assert store.line_alerts() == [None, None]
-    store.set_line_alerts([None, LineAlert("M", "SUSP", "SIGNALS")])
+    store.set_line_alerts([None, LineAlert("M", "SUSP", "SIGNAL PROBLEM")])
     out = store.line_alerts()
-    assert out[0] is None and out[1].tag == "SUSP" and out[1].reason == "SIGNALS"
+    assert out[0] is None and out[1].tag == "SUSP" and out[1].reason == "SIGNAL PROBLEM"
 
 
 def test_weather_holder_roundtrip():

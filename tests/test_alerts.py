@@ -112,8 +112,9 @@ def test_parse_reason_unknown_and_empty_are_blank():
 
 
 def test_parse_reason_specific_wins_over_generic():
-    # "signal problem" and "signal maintenance" both map to SIGNALS; ensure the
-    # ordering never accidentally returns a less-specific label first.
+    # "signal problem" and "signal maintenance" both map to a SIGNAL label
+    # (SIGNAL PROBLEM / SIGNAL WORK); ensure the ordering never accidentally
+    # returns a less-specific label first.
     assert parse_reason("a signal problem near the station") == "SIGNAL PROBLEM"
 
 
