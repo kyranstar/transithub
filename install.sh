@@ -73,5 +73,7 @@ fi
 echo
 echo "==> Done. IMPORTANT: run via the venv binary so it finds its dependencies:"
 echo "      sudo $VENV/bin/transithub --config $HERE/config.yaml"
-echo "    Autostart: sudo cp systemd/transithub.service /etc/systemd/system/ \\"
-echo "               && sudo systemctl enable --now transithub"
+echo "    Autostart (+ boot-time self-update) — one idempotent, self-healing script:"
+echo "      sudo $HERE/scripts/setup-autostart.sh"
+echo "    (Enables the sign with Restart=always, plus a one-shot that runs"
+echo "     'git pull + ./install.sh' once each boot, before the sign. Re-run any time.)"

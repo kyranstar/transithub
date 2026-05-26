@@ -107,13 +107,22 @@ cd transithub && ./install.sh        # apt deps, builds the matrix binding, venv
 sudo .venv/bin/transithub --config config.yaml   # sudo needed for GPIO timing
 ```
 
-To start on every boot:
+To start on every boot, run the one setup script — it's idempotent and self-healing,
+so re-run it any time:
 
 ```bash
-sudo cp systemd/transithub.service /etc/systemd/system/   # edit paths if not /home/pi/transithub
-sudo systemctl enable --now transithub
+sudo ./scripts/setup-autostart.sh
 journalctl -u transithub -f                               # logs
 ```
+
+It installs and enables two units, pointed at this checkout: **`transithub.service`**
+(the sign, `Restart=always`) and **`transithub-update.service`**, a one-shot that runs
+`git pull` + `./install.sh` once each boot — just before the sign — so the Pi
+self-updates on reboot. The update is best-effort: if you're offline or the pull can't
+fast-forward, the sign still starts on the code it already has. Re-running the script
+re-renders the units, reloads systemd, clears any failed state, restarts, and prints a
+status summary. (A pull that changes the `systemd/*.service` files takes effect on the
+*next* run of this script — it can't re-apply units mid-boot.)
 
 ## Configure
 
