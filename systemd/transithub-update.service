@@ -1,0 +1,20 @@
+[Unit]
+Description=TransitHub self-update (git pull + install) before the sign starts
+After=network-online.target
+Wants=network-online.target
+# Run before the sign, so a boot picks up the latest code first.
+Before=transithub.service
+
+[Service]
+Type=oneshot
+# Run as the repo owner (not root): git pull on a pi-owned checkout avoids git's
+# "dubious ownership" guard, and install.sh's `pip install -e .` keeps the venv
+# owned by pi. install.sh elevates with sudo only for the rare apt step.
+User=pi
+WorkingDirectory=/home/pi/transithub
+ExecStart=/home/pi/transithub/scripts/update.sh
+# Headroom for the rare case where a pull triggers the C++ matrix-binding rebuild.
+TimeoutStartSec=900
+
+[Install]
+WantedBy=multi-user.target

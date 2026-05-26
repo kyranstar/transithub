@@ -1,7 +1,9 @@
 [Unit]
 Description=TransitHub NYC subway LED sign
-After=network-online.target
-Wants=network-online.target
+# Wait for the one-shot self-update to finish first, but only Wants= it (not
+# Requires=) so the sign still starts if the update is skipped or fails.
+After=network-online.target transithub-update.service
+Wants=network-online.target transithub-update.service
 
 [Service]
 Type=simple
