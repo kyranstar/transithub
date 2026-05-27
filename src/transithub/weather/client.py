@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Callable
 
 from ..clock import now as now_eastern
-from .model import Weather, condition_for_code, precip_window
+from .model import Weather, condition_for_code, current_uv, precip_window
 
 FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
 AQI_URL = "https://air-quality-api.open-meteo.com/v1/air-quality"
@@ -32,7 +32,7 @@ class WeatherClient:
             "latitude": self.lat, "longitude": self.lon,
             "current": ("temperature_2m,apparent_temperature,weather_code,precipitation,"
                         "relative_humidity_2m,wind_speed_10m"),
-            "hourly": "precipitation_probability,precipitation,snowfall,weather_code",
+            "hourly": "precipitation_probability,precipitation,snowfall,weather_code,uv_index",
             "daily": ("weather_code,temperature_2m_max,temperature_2m_min,"
                       "precipitation_probability_max,uv_index_max,sunrise,sunset"),
             "temperature_unit": self.units,
@@ -58,8 +58,10 @@ class WeatherClient:
         except Exception:
             aqi = 0     # AQI is optional; never block the weather on it
         now_precip = float(cur.get("precipitation") or 0) > 0
-        precip = (precip_window(f["hourly"], now_eastern(), now_precip=now_precip)
-                  if "hourly" in f else None)
+        hourly = f.get("hourly")
+        precip = precip_window(hourly, now_eastern(), now_precip=now_precip) if hourly else None
+        uv_max = float(daily["uv_index_max"][0])
+        uv_now = current_uv(hourly, now_eastern()) if hourly else None
         return Weather(
             temp=float(cur["temperature_2m"]),
             feels_like=float(cur["apparent_temperature"]),
@@ -67,11 +69,12 @@ class WeatherClient:
             today_high=float(daily["temperature_2m_max"][0]),
             today_low=float(daily["temperature_2m_min"][0]),
             precip_prob=int(daily["precipitation_probability_max"][0]),
-            uv_index=float(daily["uv_index_max"][0]),
+            uv_index=uv_max,
             aqi=aqi,
             sunrise=datetime.fromisoformat(daily["sunrise"][0]),
             sunset=datetime.fromisoformat(daily["sunset"][0]),
             precip=precip,
             humidity=int(cur.get("relative_humidity_2m") or 0),
             wind_mph=float(cur.get("wind_speed_10m") or 0),
+            uv_now=uv_now if uv_now is not None else uv_max,
         )

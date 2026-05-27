@@ -30,7 +30,8 @@ def test_calm_day_has_core_plus_clean_air():
 
 
 def test_high_uv_adds_a_flag_slide():
-    assert _scene(_w(uv_index=9.0)).slide_count == 4  # +1 over the calm-day baseline
+    # 2pm with the sun still blazing (current UV high) -> the UV flag is live
+    assert _scene(_w(uv_index=9.0, uv_now=9.0)).slide_count == 4  # +1 over calm-day baseline
 
 
 def test_now_slide_shows_temp_pixels():
@@ -154,7 +155,7 @@ def test_rounds_derives_duration():
 # --- lean (night) mode ------------------------------------------------------
 def test_lean_drops_advisory_and_extra_slides():
     # humid + high UV would add WINDOWS + UV flags and a verdict; lean keeps only core
-    w = _w(condition=Condition.CLEAR, humidity=90, uv_index=9.0, aqi=30,
+    w = _w(condition=Condition.CLEAR, humidity=90, uv_index=9.0, uv_now=9.0, aqi=30,
            temp=96.0, feels_like=99.0)
     full = _scene(w)
     lean = _scene(w, lean=True)

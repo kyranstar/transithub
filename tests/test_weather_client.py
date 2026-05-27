@@ -72,3 +72,42 @@ def test_humidity_and_wind_default_when_absent():
     w = WeatherClient(40.69, -73.92, fetcher=_fetch).fetch()
     assert w.humidity == 0
     assert w.wind_mph == 0.0
+
+
+def test_requests_hourly_uv():
+    from urllib.parse import parse_qs, urlparse
+
+    seen = {}
+
+    def spy(url):
+        seen[url] = True
+        return _fetch(url)
+
+    WeatherClient(40.69, -73.92, fetcher=spy).fetch()
+    forecast = next(u for u in seen if "air-quality" not in u)
+    hourly = parse_qs(urlparse(forecast).query)["hourly"][0]
+    assert "uv_index" in hourly.split(",")
+
+
+def test_uv_now_from_hourly():
+    def fetch(url):
+        if "air-quality" in url:
+            return _fetch(url)
+        f = _fetch(url)
+        # a flat day of hourly UV -> whatever hour we're in reads the same value
+        f["hourly"] = {
+            "time": [f"2026-05-23T{h:02d}:00" for h in range(24)],
+            "precipitation_probability": [0] * 24, "precipitation": [0.0] * 24,
+            "snowfall": [0.0] * 24, "weather_code": [3] * 24,
+            "uv_index": [4.0] * 24,
+        }
+        return f
+
+    w = WeatherClient(40.69, -73.92, fetcher=fetch).fetch()
+    assert w.uv_now == 4.0
+
+
+def test_uv_now_falls_back_to_daily_max_without_hourly():
+    # legacy fixture has no hourly block -> uv_now mirrors the day's max
+    w = WeatherClient(40.69, -73.92, fetcher=_fetch).fetch()
+    assert w.uv_now == w.uv_index

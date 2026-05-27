@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 
 from transithub.weather.model import (
     Condition, condition_for_code, SunPhase, sun_phase, Weather, flags, Flag,
-    PrecipWindow, precip_window, moon_phase, summary,
+    PrecipWindow, precip_window, moon_phase, summary, current_uv,
 )
 
 
@@ -61,6 +61,45 @@ def test_flag_uv_levels():
     assert flags(_w(uv_index=6.0), datetime(2026, 5, 23, 9, 0), [])[0] == Flag("UV HIGH", "SUNSCREEN")
     assert flags(_w(uv_index=9.0), datetime(2026, 5, 23, 9, 0), [])[0] == Flag("UV VERY HIGH", "SUNSCREEN")
     assert flags(_w(uv_index=11.5), datetime(2026, 5, 23, 9, 0), [])[0] == Flag("UV EXTREME", "SUNSCREEN")
+
+
+# --- UV warning is a daytime, peak-aware beat ---
+# _w() day: sunrise 05:31, sunset 20:13 -> solar noon ~12:52.
+UV_MORNING = datetime(2026, 5, 23, 9, 0)         # sun up, before the peak
+UV_AFTERNOON = datetime(2026, 5, 23, 16, 0)      # sun up, past the peak
+UV_AFTER_SUNSET = datetime(2026, 5, 23, 21, 0)   # sun is down
+
+
+def test_flag_uv_shown_in_morning_even_when_current_reading_low():
+    # current UV still low at 9am, but the day peaks high -> warn ahead of the peak
+    out = flags(_w(uv_index=9.0, uv_now=1.0), UV_MORNING, [])
+    assert Flag("UV VERY HIGH", "SUNSCREEN") in out
+
+
+def test_flag_uv_hidden_after_sunset():
+    out = flags(_w(uv_index=11.0, uv_now=0.0), UV_AFTER_SUNSET, [])
+    assert all(not f.headline.startswith("UV") for f in out)
+
+
+def test_flag_uv_hidden_after_peak_once_current_retreats_below_threshold():
+    # past solar noon and the real reading has eased under the warn floor -> stand down
+    out = flags(_w(uv_index=9.0, uv_now=3.0), UV_AFTERNOON, [])
+    assert all(not f.headline.startswith("UV") for f in out)
+
+
+def test_flag_uv_still_shown_after_peak_while_current_stays_high():
+    out = flags(_w(uv_index=9.0, uv_now=7.0), UV_AFTERNOON, [])
+    assert Flag("UV VERY HIGH", "SUNSCREEN") in out
+
+
+def test_current_uv_picks_the_current_hour():
+    h = {"time": [datetime(2026, 5, 23, n, 0).isoformat() for n in range(6)],
+         "uv_index": [0.0, 0.2, 1.0, 3.0, 5.0, 7.0]}
+    assert current_uv(h, datetime(2026, 5, 23, 4, 30)) == 5.0
+
+
+def test_current_uv_none_without_hourly_data():
+    assert current_uv({}, datetime(2026, 5, 23, 4, 30)) is None
 
 
 def test_flag_aqi_levels():
@@ -139,6 +178,20 @@ def test_summary_stay_in_when_air_is_bad():
 def test_summary_stay_in_when_very_windy():
     w = _w(temp=66, feels_like=66, wind_mph=30)
     assert summary(w, DAYTIME) == "STAY IN"
+
+
+def test_summary_no_go_outside_while_uv_warning_active():
+    # lovely otherwise, but a high-UV morning is exactly when not to send you out bare
+    w = _w(temp=68, feels_like=68, condition=Condition.CLEAR, precip_prob=5,
+           aqi=25, wind_mph=6, uv_index=9.0, uv_now=2.0)
+    assert summary(w, UV_MORNING) != "GO OUTSIDE"
+
+
+def test_summary_go_outside_once_uv_retreats_before_sunset():
+    # same day, late afternoon: the real UV has eased off -> a clear "GO OUTSIDE"
+    w = _w(temp=68, feels_like=68, condition=Condition.CLEAR, precip_prob=5,
+           aqi=25, wind_mph=6, uv_index=9.0, uv_now=3.0)
+    assert summary(w, UV_AFTERNOON) == "GO OUTSIDE"
 
 
 def test_summary_none_when_merely_okay():

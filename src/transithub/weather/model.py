@@ -54,13 +54,14 @@ class Weather:
     today_high: float
     today_low: float
     precip_prob: int
-    uv_index: float
+    uv_index: float             # the day's peak UV (sets warning severity)
     aqi: int
     sunrise: datetime
     sunset: datetime
     precip: Optional[PrecipWindow] = None
     humidity: int = 0           # relative humidity, percent
     wind_mph: float = 0.0       # current wind speed, mph
+    uv_now: float = 0.0         # UV right now (eases off after the midday peak)
 
 
 @dataclass(frozen=True)
@@ -88,6 +89,7 @@ HUMID_PCT = 80          # relative humidity that makes it feel muggy / keep wind
 HOT_F = 90              # temp or feels-like that warrants a "hot day" hero
 WINDY_MPH = 22          # sustained wind that warrants a "windy" hero
 CLEAN_AQI = 40          # US AQI at/under which the air is genuinely great
+UV_WARN = 6             # UV index at/above which sunscreen is worth a nudge
 
 
 def precip_window(hourly: dict, now: datetime, now_precip: bool = False,
@@ -184,6 +186,21 @@ def sun_phase(now: datetime, sunrise: datetime, sunset: datetime) -> SunPhase:
     return SunPhase.NIGHT
 
 
+def current_uv(hourly: dict, now: datetime) -> Optional[float]:
+    """The UV reading for the hour we're in, or None when there's no hourly UV."""
+    times = [datetime.fromisoformat(t) for t in hourly.get("time", [])]
+    uv = hourly.get("uv_index")
+    if not times or not uv:
+        return None
+    cur = 0
+    for i in range(len(times)):
+        if times[i] <= now:
+            cur = i
+        else:
+            break
+    return float(uv[cur] or 0)
+
+
 def trash_tomorrow(now: datetime, trash_days: List[str]) -> bool:
     if now.hour < 15:                       # only 3pm -> midnight
         return False
@@ -206,17 +223,31 @@ def flags(weather: Weather, now: datetime, trash_days: List[str]) -> List[Flag]:
     elif weather.precip_prob >= 50:   # fallback when no hourly data
         head = "SNOW LIKELY" if weather.condition is Condition.SNOW else "RAIN LIKELY"
         out.append(Flag(head, f"{weather.precip_prob}%"))
-    uv = weather.uv_index
-    if uv >= 11:
-        out.append(Flag("UV EXTREME", "SUNSCREEN"))
-    elif uv >= 8:
-        out.append(Flag("UV VERY HIGH", "SUNSCREEN"))
-    elif uv >= 6:
-        out.append(Flag("UV HIGH", "SUNSCREEN"))
+    uv = _uv_advisory(weather, now)
+    if uv is not None:
+        out.append(uv)
     adv = _window_advisory(weather)
     if adv is not None:
         out.append(adv)
     return out
+
+
+def _uv_advisory(weather: Weather, now: datetime) -> Optional[Flag]:
+    """A 'wear sunscreen' nudge, sized to the day's peak UV but only while it's worth
+    saying. UV is a sun-up phenomenon, so it's silent at night. Through the morning we
+    warn ahead of the midday peak even though the reading is still low; once we're past
+    solar noon and the real reading has eased back under the threshold, we stand down."""
+    peak = weather.uv_index
+    if peak < UV_WARN or not (weather.sunrise <= now <= weather.sunset):
+        return None
+    solar_noon = weather.sunrise + (weather.sunset - weather.sunrise) / 2
+    if now >= solar_noon and weather.uv_now < UV_WARN:
+        return None
+    if peak >= 11:
+        return Flag("UV EXTREME", "SUNSCREEN")
+    if peak >= 8:
+        return Flag("UV VERY HIGH", "SUNSCREEN")
+    return Flag("UV HIGH", "SUNSCREEN")
 
 
 def _window_advisory(weather: Weather) -> Optional[Flag]:
@@ -239,7 +270,6 @@ def _window_advisory(weather: Weather) -> Optional[Flag]:
 
 # --- verbal verdict ---------------------------------------------------------
 _GO_TEMP_LO, _GO_TEMP_HI = 55, 78    # comfortable band (F)
-_GO_UV_MAX = 7                       # at/under "high" -> still fine with a hat
 _GO_WIND_MAX = 15                    # a pleasant breeze, no more
 _STAY_TEMP_LO, _STAY_TEMP_HI = 25, 95   # outside this, it's punishing
 _STAY_AQI = 151                      # genuinely unhealthy for everyone
@@ -262,6 +292,6 @@ def summary(weather: Weather, now: datetime) -> Optional[str]:
             and weather.condition in (Condition.CLEAR, Condition.CLOUDY)
             and weather.precip_prob < PRECIP_THRESHOLD
             and weather.aqi <= CLEAN_AQI
-            and weather.uv_index <= _GO_UV_MAX
+            and _uv_advisory(weather, now) is None   # don't send them out under a UV warning
             and weather.wind_mph <= _GO_WIND_MAX)
     return "GO OUTSIDE" if nice else None
